@@ -1,0 +1,327 @@
+TRANG WEB QUẢN LÝ CÁC VIỆN TRONG TRƯỜNG ĐHXD HÀ NỘI
+I. PHÂN TÍCH CHỨC NĂNG.
+1. Chức năng Quản lý báo cáo định kỳ (6 tháng)
+ Mục tiêu:
+Cho phép mỗi Viện lập báo cáo định kỳ 6 tháng về các đề tài, tài chính và nhân sự liên quan.
+ Chức năng:
+Mỗi viện có tài khoản riêng được phân quyền để lập báo cáo.
+Tạo báo cáo định kỳ 6 tháng với các nội dung:
+Danh sách đề tài đã thực hiện trong kỳ.
+Nguồn vốn từng đề tài.
+Kết quả tài chính từng đề tài (lãi/lỗ).
+Số lượng nhân sự tham gia mỗi đề tài.
+Nhân sự mới phát sinh trong kỳ (tự động phát hiện nếu chưa có trong hệ thống).
+Giao diện cập nhật nhân sự mới bao gồm:
+Thông tin cá nhân (họ tên, ngày sinh, liên hệ,…)
+Hồ sơ năng lực: bằng cấp, kinh nghiệm, chuyên môn, công trình đã tham gia.
+Tự động sinh báo cáo PDF/Word từ dữ liệu đã nhập.
+Lưu lịch sử báo cáo và cho phép chỉnh sửa trước khi "chốt" báo cáo định kỳ.
+
+ 2. Quản lý Nhân sự / Hành chính
+ Mục tiêu:
+Theo dõi nhân sự theo cấp bậc, vai trò trong từng đề tài và thông tin hành chính đầy đủ.
+ Chức năng:
+Thêm, sửa, xóa nhân sự.
+Theo dõi:
+Cấp bậc (Trưởng đề tài / Thành viên / Cộng tác viên).
+Vai trò chính hay phụ trong đề tài.
+Tự động kiểm tra phát sinh nhân sự mới khi báo cáo đề tài.
+Khi thêm mới:
+Cập nhật thông tin cá nhân.
+Nhập hồ sơ năng lực (upload tài liệu PDF, ảnh, bằng cấp…).
+Phân loại nhân sự theo phòng ban / viện / chuyên ngành.
+Tìm kiếm nhanh nhân sự theo tên, mã số, hoặc kỹ năng.
+
+3. Quản lý Cơ sở vật chất – Phòng – Thiết bị
+ Mục tiêu:
+Theo dõi toàn bộ tài sản, thiết bị của từng viện và tình trạng hiện tại.
+ Chức năng:
+Thống kê danh mục:
+Thiết bị văn phòng: máy tính, máy in, máy chiếu,...
+Cơ sở vật chất: bàn ghế, phòng họp, phòng thí nghiệm,…
+Thông tin mỗi thiết bị/phòng gồm:
+Tên thiết bị/phòng.
+Mã tài sản / số hiệu.
+Ngày cấp.
+Tình trạng sử dụng (tốt, hỏng, bảo trì…).
+Số lượng hiện có.
+Vị trí đặt.
+Đơn vị sử dụng.
+Ngày kiểm kê gần nhất.
+Lịch sử sửa chữa / thay thế (gợi ý thêm).
+File đính kèm liên quan (nếu có).
+Báo cáo tổng hợp thiết bị theo phòng / viện.
+Đánh dấu tài sản sắp hết hạn / cần thay mới.
+
+ 4. Quản lý Tài chính
+ Mục tiêu:
+Quản lý hợp đồng (đối tác, giá trị, thời hạn).
+Quản lý ngân sách từng Viện.
+Dự toán chi tiết từng kỳ.
+Quản lý công nợ (thu, chi, nợ còn lại).
+Ghi nhận phần huy động công (công không tính lương).
+ Chức năng:
+Quản lý hợp đồng:
+Tên hợp đồng, đối tác, thời hạn, giá trị, tiến độ.
+Quản lý ngân sách:
+Tổng ngân sách được cấp.
+Dự toán theo từng hạng mục.
+Dự toán theo từng kỳ (6 tháng).
+Theo dõi doanh thu:
+Doanh thu theo hợp đồng.
+Doanh thu từ đề tài.
+Huy động công (tình nguyện, hỗ trợ kỹ thuật không lương).
+Quản lý công nợ:
+Nợ phải thu / nợ phải trả.
+Đối tác còn nợ / đã thanh toán.
+Tích hợp xuất báo cáo tài chính theo từng hợp đồng, theo viện, theo thời gian.
+ 5. Dashboard tổng hợp
+ Mục tiêu:
+Hiển thị trực quan các chỉ số quản lý quan trọng cho Ban Giám Hiệu hoặc người quản lý tổng.
+ Chức năng:
+Biểu đồ tổng hợp theo Viện:
+Doanh thu + huy động.
+Phân bổ nhân sự theo đề tài / viện / chức vụ.
+Số lượng thiết bị hiện có theo viện.
+Công nợ: nợ còn lại, đã thu, đã chi.
+Tình hình tài chính: tổng thu – tổng chi.
+Giao diện dạng biểu đồ (column, pie, bar, line…).
+Bộ lọc thời gian (tháng / quý / năm).
+Bộ lọc theo viện, theo đề tài, theo loại chi phí.
+II. ƯỚC LƯỢNG CHI PHÍ THỰC HIỆN
+Thời gian thực hiện.
+
+STT
+Đầu mục
+Yêu cầu
+Mô tả yêu cầu
+Mức độ
+Ngày làm dự kiến
+(Ngày)
+1
+Phân tích & SRS
+Thu thập yêu cầu, viết đặc tả
+Làm việc với viện, tổng hợp mẫu báo cáo
+P
+4
+2
+Đăng nhập & bảo mật
+Đăng nhập/đăng xuất, 2FA
+Email/MSSV, OTP, khóa tài khoản, log
+Đ
+2
+Phân quyền (RBAC + RLS)
+Super Admin, Admin Viện, …
+TB
+3
+Quản lý người dùng
+CRUD user, reset pass, tạm khóa
+Đ
+2
+3
+Dashboard tổng hợp
+Thẻ KPI & drill-down
+% viện nộp, doanh thu, nghĩa vụ, …
+TB
+3
+Biểu đồ doanh thu theo loại hình
+CGCN, Thầu phụ, …
+Đ
+3
+Nghĩa vụ nộp về trường
+Tính theo tỷ lệ
+Đ
+1
+Thuế theo sắc thuế
+GTGT, TNDN, …
+Đ
+1
+Công nợ & cảnh báo
+Phải thu, phải trả, quá hạn
+Đ
+2
+Nhân lực & biến động
+Cơ cấu, phát sinh mới
+Đ
+1
+CSVC/Thiết bị & cảnh báo
+Hết hạn, bảo trì
+Đ
+2
+Bộ lọc nâng cao & lưu view
+Lọc theo kỳ, năm, viện…
+TB
+3
+Theo dõi tiến độ & nghiệm thu các đề tài
+Quản lý danh sách đề tài NCKH của Viện; trạng thái: đang thực hiện / chờ nghiệm thu / đã nghiệm thu; % tiến độ; ngày dự kiến hoàn thành 
+P
+4
+Xuất PDF/Excel từ Dashboard
+Xuất theo bộ lọc
+Đ
+2
+4
+Báo cáo định kỳ 6T
+Khởi tạo kỳ báo cáo & deadline
+Cấu hình kỳ, hạn nộp
+Đ
+2
+Trạng thái quy trình & lịch sử
+Nháp → Duyệt → Khoá
+TB
+3
+Nhập khái quát đơn vị
+Nhân lực, CSVC, diện tích
+Đ
+2
+Nhập hoạt động KH&CN/Đào tạo
+Đề tài, lớp đào tạo
+Đ
+2
+Nhập doanh thu theo loại hình
+Import Excel, validate
+TB
+3
+Nhập thuế
+GTGT, TNDN, TNCN…
+Đ
+1
+Nghĩa vụ nộp về trường
+Tự tính = Doanh thu × Tỷ lệ
+Đ
+1
+Công nợ & thanh toán
+Theo dõi hợp đồng, VAT
+TB
+3
+Kế hoạch & kiến nghị
+Chỉ tiêu, đề xuất CSVC/nhân sự
+Đ
+1
+Phụ lục minh chứng
+Hợp đồng, nhân sự, thiết bị
+Đ
+1
+Bình luận theo dòng
+Reviewer ghi chú trực tiếp
+TB
+3
+Chứng từ & tệp đính kèm
+Upload, versioning, virus-scan
+P
+5
+Prefill & sao chép kỳ trước
+Lấy dữ liệu kỳ trước
+Đ
+1
+Kiểm tra hợp lệ tự động
+Cảnh báo lệch tổng, thiếu file
+TB
+3
+Gửi duyệt & ký số
+Luồng duyệt, ký điện tử
+P
+5
+Xuất báo cáo Viện (Word/PDF)
+Theo mẫu hiện hành
+Đ
+1
+5
+Tổng hợp toàn Trường
+Gom báo cáo các Viện
+Hợp nhất, tính toán
+TB
+3
+Nhận xét tự động
+Phát hiện bất thường
+Đ
+1
+Xuất tổng hợp (Word/PDF + Excel)
+Theo viện/loại hình
+Đ
+1
+6
+Quản lý nhân sự
+CRUD nhân sự & hồ sơ
+Thêm mới khi có đề tài yêu cầu nhân sự; nhập hồ sơ năng lực, trình độ chuyên môn, kinh nghiệm, upload PDF/ảnh/bằng cấp 
+TB
+3
+Phát sinh nhân sự từ báo cáo
+Tự động phát hiện nhân sự mới khi báo cáo đề tài; yêu cầu bổ sung hồ sơ năng lực nếu thiếu 
+Đ
+1
+7
+CSVC/Thiết bị
+Danh mục & trạng thái
+Mã TS, ngày cấp, vị trí…
+TB
+3
+Bảo trì & cảnh báo
+Nhắc lịch, báo hết hạn
+Đ
+1
+8
+Tài chính
+Hợp đồng & ngân sách
+CRUD hợp đồng, dự toán
+TB
+3
+Công nợ
+Phải thu/trả
+Đ
+1
+9
+Hệ thống
+Danh mục cấu hình
+Tỷ lệ nộp, loại hình…
+Đ
+1
+Import/Export
+Mẫu Excel cho các bảng
+TB
+3
+Audit & nhật ký
+Log thao tác, diff version
+TB
+3
+Hiệu năng & sao lưu
+Cache, backup hằng ngày
+TB
+1
+10
+UI/UX
+Thiết kế giao diện
+Responsive, chuẩn hóa biểu mẫu
+P
+6
+11
+Kiểm thử
+Manual test, fix lỗi
+Test toàn hệ thống
+P
+6
+12
+Triển khai
+Deploy + training
+Cài đặt, hướng dẫn
+TB
+3
+
+
+Update chức năng hệ thống quản lý các Viện:
+
+· Quản lý công nợ bảo hiểm của các Viện
+
+· Thay đổi form báo cáo tổng quan tài chính theo mẫu của BTC
+
+· Báo cáo chi tiết hàng tháng ( doanh thu, đề tài, nhân sự, công nợ )
+
+· Xuất báo cáo real-time
+
+· So sánh số liệu với báo cáo/hóa đơn thực tế
+
+· Đồng bộ thông tin với cơ sở dữ liệu của trường
+
+· Quản lý xe của nhân viên tại các Viện
+
+ 
