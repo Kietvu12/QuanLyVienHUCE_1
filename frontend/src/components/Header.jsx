@@ -17,8 +17,8 @@ const breadcrumbLabels = {
 
 const roleLabels = {
   rector: 'Viện trưởng',
-  principal: 'Trưởng phòng',
-  division: 'Trưởng bộ phận',
+  principal: 'Hiệu trưởng',
+  division: 'Cấp phòng',
   accountant: 'Kế toán',
 };
 
@@ -61,12 +61,18 @@ const Header = ({ onMenuClick }) => {
   });
 
   const getInitials = (name) => {
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(-2);
+    if (!name || typeof name !== 'string') {
+      return 'U'; // Default initial if name is not available
+    }
+    const parts = name.trim().split(' ').filter(Boolean);
+    if (parts.length === 0) {
+      return 'U';
+    }
+    if (parts.length === 1) {
+      return parts[0][0].toUpperCase();
+    }
+    // Lấy chữ cái đầu của từ đầu và từ cuối
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
   return (
@@ -102,13 +108,15 @@ const Header = ({ onMenuClick }) => {
 
       <div className="flex items-center gap-2 sm:gap-4 justify-end">
         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-xs sm:text-base">
-          {getInitials(user.name)}
+          {getInitials(user.ho_ten || user.name || user.username || '')}
         </div>
         <div className="text-right hidden md:block">
           <p className="text-base font-semibold text-gray-900 whitespace-nowrap">
-            {user.name}
+            {user.ho_ten || user.name || user.username || 'Người dùng'}
           </p>
-          <p className="text-sm text-gray-500">{roleLabels[user.role] || user.position}</p>
+          <p className="text-sm text-gray-500">
+            {roleLabels[user.role] || user.quyen?.mo_ta || user.position || 'Người dùng'}
+          </p>
         </div>
         <button
           type="button"

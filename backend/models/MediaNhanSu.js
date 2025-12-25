@@ -19,29 +19,29 @@ module.exports = (sequelize) => {
       comment: 'ID nhân sự (khóa ngoại)'
     },
     anh_ho_so: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Ảnh hồ sơ'
+      comment: 'Ảnh hồ sơ (có thể là string đơn hoặc JSON array)'
     },
     anh_bang_cap: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Ảnh bằng cấp'
+      comment: 'Ảnh bằng cấp (có thể là string đơn hoặc JSON array)'
     },
     anh_bhyt: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Ảnh BHYT'
+      comment: 'Ảnh BHYT (có thể là string đơn hoặc JSON array)'
     },
     anh_hop_dong: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Ảnh hợp đồng'
+      comment: 'Ảnh hợp đồng (có thể là string đơn hoặc JSON array)'
     },
     anh_xe: {
-      type: DataTypes.STRING(255),
+      type: DataTypes.TEXT,
       allowNull: true,
-      comment: 'Ảnh xe'
+      comment: 'Ảnh xe (có thể là string đơn hoặc JSON array)'
     },
     ngay_cap_nhat_ho_so: {
       type: DataTypes.DATE,

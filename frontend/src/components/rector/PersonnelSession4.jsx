@@ -1,78 +1,7 @@
 import { FaDownload, FaFileAlt, FaCalendarAlt, FaChartLine } from 'react-icons/fa';
-import React from 'react';
-const recentActivities = [
-  {
-    id: 1,
-    type: 'Thêm mới',
-    person: 'Nguyễn Văn G',
-    position: 'Chuyên viên',
-    department: 'Công nghệ thông tin',
-    date: '15/12/2025',
-    time: '09:30',
-    action: 'Đã thêm nhân sự mới',
-  },
-  {
-    id: 2,
-    type: 'Cập nhật',
-    person: 'Trần Thị H',
-    position: 'Chuyên viên cao cấp',
-    department: 'Xây dựng',
-    date: '14/12/2025',
-    time: '14:20',
-    action: 'Đã cập nhật thông tin lương',
-  },
-  {
-    id: 3,
-    type: 'Thay đổi',
-    person: 'Lê Văn I',
-    position: 'Trưởng phòng',
-    department: 'Kỹ thuật',
-    date: '13/12/2025',
-    time: '11:15',
-    action: 'Đã thay đổi phòng ban',
-  },
-  {
-    id: 4,
-    type: 'Thêm mới',
-    person: 'Phạm Thị K',
-    position: 'Nhân viên',
-    department: 'Hành chính',
-    date: '12/12/2025',
-    time: '16:45',
-    action: 'Đã thêm nhân sự mới',
-  },
-  {
-    id: 5,
-    type: 'Cập nhật',
-    person: 'Hoàng Văn L',
-    position: 'Chuyên viên',
-    department: 'Công nghệ thông tin',
-    date: '11/12/2025',
-    time: '10:00',
-    action: 'Đã cập nhật thông tin liên hệ',
-  },
-];
-
-const statistics = [
-  {
-    label: 'Tổng hợp đồng lao động',
-    value: '125',
-    icon: FaFileAlt,
-    iconBg: 'bg-blue-500',
-  },
-  {
-    label: 'Hợp đồng sắp hết hạn',
-    value: '8',
-    icon: FaCalendarAlt,
-    iconBg: 'bg-yellow-500',
-  },
-  {
-    label: 'Tỷ lệ tăng trưởng',
-    value: '+12.5%',
-    icon: FaChartLine,
-    iconBg: 'bg-emerald-500',
-  },
-];
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { hopDongStatisticsAPI, nhanSuAPI, nhanSuStatisticsAPI } from '../../services/api';
 
 const getActivityColor = (type) => {
   switch (type) {
@@ -87,7 +16,103 @@ const getActivityColor = (type) => {
   }
 };
 
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN');
+};
+
+const formatTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+};
+
 const PersonnelSession4 = () => {
+  const { user } = useAuth();
+  const [recentActivities, setRecentActivities] = useState([]);
+  const [hopDongStats, setHopDongStats] = useState({
+    tong_hop_dong: 0,
+    sap_het_han: 0,
+    ty_le_tang_truong: 0
+  });
+  const [nhanSuStats, setNhanSuStats] = useState({
+    tong_nhan_su: 0,
+    nhan_su_moi: 0,
+    nghi_viec: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchData();
+  }, [user?.id_vien]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const params = { id_vien: user?.id_vien };
+
+      // Fetch thống kê hợp đồng
+      const hopDongRes = await hopDongStatisticsAPI.getStatistics(params);
+      if (hopDongRes.success) {
+        setHopDongStats(hopDongRes.data);
+      }
+
+      // Fetch thống kê nhân sự
+      const nhanSuRes = await nhanSuStatisticsAPI.getSummary(params);
+      if (nhanSuRes.success) {
+        setNhanSuStats(nhanSuRes.data);
+      }
+
+      // Fetch nhân sự mới nhất để làm hoạt động gần đây
+      const nhanSuListRes = await nhanSuAPI.getAll({ 
+        ...params, 
+        limit: 5,
+        page: 1 
+      });
+      if (nhanSuListRes.success) {
+        const activities = (nhanSuListRes.data || []).map((ns, index) => {
+          const createdDate = new Date(ns.created_at);
+          return {
+            id: ns.id,
+            type: 'Thêm mới',
+            person: ns.ho_ten,
+            position: ns.chuc_vu || 'Nhân viên',
+            department: ns.phongBan?.ten_phong_ban || '-',
+            date: formatDate(ns.created_at),
+            time: formatTime(ns.created_at),
+            action: 'Đã thêm nhân sự mới'
+          };
+        });
+        setRecentActivities(activities);
+      }
+    } catch (err) {
+      console.error('Error fetching data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const statistics = [
+    {
+      label: 'Tổng hợp đồng lao động',
+      value: hopDongStats.tong_hop_dong.toString(),
+      icon: FaFileAlt,
+      iconBg: 'bg-blue-500',
+    },
+    {
+      label: 'Hợp đồng sắp hết hạn',
+      value: hopDongStats.sap_het_han.toString(),
+      icon: FaCalendarAlt,
+      iconBg: 'bg-yellow-500',
+    },
+    {
+      label: 'Tỷ lệ tăng trưởng',
+      value: `${hopDongStats.ty_le_tang_truong >= 0 ? '+' : ''}${hopDongStats.ty_le_tang_truong.toFixed(1)}%`,
+      icon: FaChartLine,
+      iconBg: 'bg-emerald-500',
+    },
+  ];
   return (
     <section className="px-6">
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -107,7 +132,12 @@ const PersonnelSession4 = () => {
           </div>
 
           <div className="space-y-4">
-            {recentActivities.map((activity) => (
+            {loading ? (
+              <div className="text-center py-8 text-gray-500">Đang tải...</div>
+            ) : recentActivities.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">Chưa có hoạt động nào</div>
+            ) : (
+              recentActivities.map((activity) => (
               <div
                 key={activity.id}
                 className="flex items-start gap-4 p-4 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors"
@@ -135,7 +165,8 @@ const PersonnelSession4 = () => {
                   </p>
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -174,9 +205,11 @@ const PersonnelSession4 = () => {
               Thông tin quan trọng
             </h4>
             <ul className="text-xs text-blue-800 space-y-1">
-              <li>• 8 hợp đồng sắp hết hạn trong 30 ngày</li>
-              <li>• 5 nhân sự mới trong tháng này</li>
-              <li>• Tỷ lệ nghỉ việc: 2.4%</li>
+              <li>• {hopDongStats.sap_het_han} hợp đồng sắp hết hạn trong 30 ngày</li>
+              <li>• {nhanSuStats.nhan_su_moi} nhân sự mới trong tháng này</li>
+              <li>• Tỷ lệ nghỉ việc: {nhanSuStats.tong_nhan_su > 0 
+                ? ((nhanSuStats.nghi_viec / nhanSuStats.tong_nhan_su) * 100).toFixed(1) 
+                : '0'}%</li>
             </ul>
           </div>
         </div>

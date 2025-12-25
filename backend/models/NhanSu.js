@@ -23,6 +23,16 @@ module.exports = (sequelize) => {
       allowNull: false,
       comment: 'Họ tên'
     },
+    ngay_sinh: {
+      type: DataTypes.DATEONLY,
+      allowNull: true,
+      comment: 'Ngày sinh'
+    },
+    chuc_vu: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Chức vụ: Viện trưởng, Kế toán, Trưởng phòng, Nhân viên'
+    },
     dia_chi_tam_tru: {
       type: DataTypes.TEXT,
       allowNull: true,
@@ -58,20 +68,15 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment: 'Người thân liên hệ'
     },
-    ngay_ki_hop_dong_lao_dong: {
-      type: DataTypes.DATEONLY,
-      allowNull: true,
-      comment: 'Ngày ký hợp đồng lao động'
-    },
     ngay_bat_dau_lam: {
       type: DataTypes.DATEONLY,
       allowNull: true,
       comment: 'Ngày bắt đầu làm'
     },
-    ma_hop_dong_lao_dong: {
-      type: DataTypes.STRING(100),
+    ngay_ket_thuc_lam_viec: {
+      type: DataTypes.DATEONLY,
       allowNull: true,
-      comment: 'Mã hợp đồng lao động'
+      comment: 'Ngày kết thúc làm việc'
     }
   }, {
     tableName: 'nhan_su',
@@ -117,6 +122,18 @@ module.exports = (sequelize) => {
     NhanSu.hasMany(models.NhanSuDeTai, {
       foreignKey: 'id_nhan_su',
       as: 'nhanSuDeTais'
+    });
+
+    // Một nhân sự có nhiều hợp đồng lao động
+    NhanSu.hasMany(models.HopDongLaoDong, {
+      foreignKey: 'id_nhan_su',
+      as: 'hopDongLaoDongs'
+    });
+
+    // Một nhân sự có nhiều bảng lương
+    NhanSu.hasMany(models.BangLuong, {
+      foreignKey: 'id_nhan_su',
+      as: 'bangLuongs'
     });
   };
 

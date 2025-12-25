@@ -1,0 +1,120 @@
+# Hướng dẫn sửa lỗi Session không chia sẻ giữa các tab
+
+## Vấn đề
+Khi đăng nhập vào admin, sau đó mở tab khác thì lại yêu cầu đăng nhập lại. Đây là vấn đề về session cookie không được chia sẻ giữa các tab.
+
+## Giải pháp
+
+### 1. Cấu hình Session trong AppController.php
+
+Thêm hoặc sửa method `beforeFilter()` trong file `AppController.php`:
+
+```php
+public function beforeFilter()
+{
+    parent::beforeFilter();
+    
+    // Cấu hình session cookie để chia sẻ giữa các tab
+    ini_set('session.cookie_httponly', 1);
+    ini_set('session.use_only_cookies', 1);
+    ini_set('session.cookie_samesite', 'Lax'); // Hoặc 'None' nếu cần cross-site
+    
+    // Đảm bảo session được lưu trữ đúng cách
+    Configure::write('Session', array(
+        'defaults' => 'php',
+        'timeout' => 240, // 4 giờ
+        'cookieTimeout' => 240,
+        'checkAgent' => false, // Quan trọng: tắt check agent để chia sẻ giữa tab
+        'ini' => array(
+            'session.cookie_httponly' => 1,
+            'session.use_only_cookies' => 1,
+            'session.cookie_samesite' => 'Lax'
+        )
+    ));
+}
+```
+
+### 2. Hoặc cấu hình trong core.php / bootstrap.php
+
+Nếu không có AppController, thêm vào file `app/Config/core.php` (CakePHP 2.x):
+
+```php
+Configure::write('Session', array(
+    'defaults' => 'php',
+    'timeout' => 240,
+    'cookieTimeout' => 240,
+    'checkAgent' => false, // QUAN TRỌNG: Tắt check agent
+    'ini' => array(
+        'session.cookie_httponly' => 1,
+        'session.use_only_cookies' => 1,
+        'session.cookie_samesite' => 'Lax',
+        'session.cookie_path' => '/'
+    )
+));
+```
+
+### 3. Sửa trong UsersController.php
+
+Trong method `admin_login()`, đảm bảo session được tạo đúng cách:
+
+```php
+public function admin_login()
+{
+    if ($this->request->is('post')) {
+        if ($this->Auth->login()) {
+            $data = $this->request->data['User'];
+            $admin = $this->Auth->user();
+            
+            // Đảm bảo session được lưu
+            $this->Session->write('Auth.User', $admin);
+            
+            // Ghi nhớ tài khoản với cookie
+            if (!empty($data['remember'])) {
+                // Cấu hình cookie
+                $this->Cookie->name = 'oneweb';
+                $this->Cookie->time = '30 days';
+                $this->Cookie->path = '/';
+                $this->Cookie->domain = ''; // Để trống để dùng domain hiện tại
+                $this->Cookie->secure = false; // Đặt true nếu sử dụng HTTPS
+                $this->Cookie->key = 'kjfdljiou39099083kjjklj@#^&!*&*&$^&*&98hkjfhdjk';
+                $this->Cookie->httpOnly = true;
+
+                // Lưu thông tin đăng nhập vào cookie
+                $this->Cookie->write('auth_remember', $admin, false, 2592000);
+            }
+
+            $url = $this->Auth->redirect();
+            $url = ($url == '/') ? array('controller' => 'pages', 'action' => 'index') : $url;
+            $this->redirect($url);
+        } else {
+            $this->Session->setFlash(__('Thông tin truy cập không đúng'));
+        }
+    }
+}
+```
+
+## Điểm quan trọng
+
+1. **`checkAgent => false`**: Đây là thiết lập quan trọng nhất. Khi bật, CakePHP sẽ kiểm tra User-Agent và không chia sẻ session giữa các tab nếu User-Agent khác nhau.
+
+2. **Session cookie path**: Đảm bảo cookie path là `/` để có thể truy cập từ mọi đường dẫn.
+
+3. **SameSite attribute**: 
+   - `Lax`: Chia sẻ session giữa các tab cùng domain
+   - `None`: Cho phép cross-site (cần `Secure => true` nếu dùng HTTPS)
+
+4. **Cookie domain**: Để trống (`''`) để tự động dùng domain hiện tại.
+
+## Kiểm tra
+
+Sau khi sửa, kiểm tra:
+1. Đăng nhập vào admin
+2. Mở tab mới và truy cập cùng domain
+3. Tab mới phải tự động đăng nhập mà không cần đăng nhập lại
+
+## Lưu ý bảo mật
+
+- Nếu sử dụng HTTPS, đặt `secure => true`
+- `httpOnly => true` để tránh XSS attacks
+- `SameSite => Lax` hoặc `Strict` để tránh CSRF attacks
+

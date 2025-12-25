@@ -1,0 +1,25 @@
+Phân tích chức năng
+Đăng nhập phân quyền
+- Cấp kế toán ( cấp thấp nhất trong hệ thống)
+-> Tạo báo cáo, sửa báo cáo, xóa báo cáo, xem báo cáo, xem tình trạng báo cáo, gửi báo cáo đến cấp Viện trưởng để phê duyệt
+-> Tạo dữ liệu doanh thu, chi phí. Sửa, xóa, xem dữ liệu doanh thu, chi phí.
+-> Tạo dữ liệu nhân sự, sửa dữ liệu nhân sư, xóa dữ liệu nhân sự, xem dữ liệu nhân sự toàn viện ( bao gồm thông tin, hợp đồng lao đồng, xe, bảo hiểm y tế, bảng lương,..)
+-> Xem dữ liệu các phòng của Viện
+-> Thêm mới tài sản, sửa xóa tài sản. Xem dữ liệu lịch sử thay đổi vị trí của tài sản
+-> Xem dữ liệu của các đề tài nghiên cứu
+- Cấp Viện trưởng
+->Có quyền truy cập,thay đổi và thao tác tất cả dữ liệu trong Viện do mình quản lý, phê duyệt từ chối báo cáo, sau khi phê duyệt xong thì gửi lên cấp Phòng cao hơn
+-> Có quyền thay đổi quyền của tất cả các tài khoản trong Viện do người dùng quản lý
+- Cấp Phòng
+-> Có quyền được xem tất cả dữ liệu của tất cả các Viện trong trường
+-> Có quyền phê duyệt, từ chối báo cáo do các Viện gửi lên
+-> Tạo báo cáo tổng quan
+Cấp Viện trưởng:
+-> Có quyền được xem tất cả dữ liệu của tất cả các Viện trong trường
+-> Có quyền được thao tác với tất cả tài khoản trong hệ thống
+-> Được quyền tạo ra Viện mới
+-> Xem được tất cả các báo cáo của các Viện và Phòng gửi lên.
+
+Với dữ liệu nhân sự trong đề tài, thì có theert cho phép chọn nhân sự trong Viện, hoặc nhân sự ngoài viện, id Viện bằng null
+Khi cập nhật trạng thái sang hoàn thành, thì tiến độ phải đạt 100%. 
+

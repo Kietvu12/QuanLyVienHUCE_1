@@ -10,8 +10,51 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Tăng giới hạn payload để hỗ trợ upload ảnh base64 (50MB) - tương thích ngược
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Serve static files từ thư mục uploads
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Routes
+const authRoutes = require('./routes/authRoutes');
+const vienRoutes = require('./routes/vienRoutes');
+const nhanSuRoutes = require('./routes/nhanSuRoutes');
+const hopDongLaoDongRoutes = require('./routes/hopDongLaoDongRoutes');
+const bangLuongRoutes = require('./routes/bangLuongRoutes');
+const doanhThuRoutes = require('./routes/doanhThuRoutes');
+const chiPhiRoutes = require('./routes/chiPhiRoutes');
+const baoCaoRoutes = require('./routes/baoCaoRoutes');
+const deTaiNghienCuuRoutes = require('./routes/deTaiNghienCuuRoutes');
+const taiSanRoutes = require('./routes/taiSanRoutes');
+const phongCuaVienRoutes = require('./routes/phongCuaVienRoutes');
+const phongBanRoutes = require('./routes/phongBanRoutes');
+const baoHiemYTeRoutes = require('./routes/baoHiemYTeRoutes');
+const thongTinXeRoutes = require('./routes/thongTinXeRoutes');
+const mediaNhanSuRoutes = require('./routes/mediaNhanSuRoutes');
+const nhanSuStatisticsRoutes = require('./routes/nhanSuStatisticsRoutes');
+
+// Auth routes (public)
+app.use('/api/auth', authRoutes);
+
+// Protected routes
+app.use('/api/vien', vienRoutes);
+app.use('/api/nhan-su', nhanSuRoutes);
+app.use('/api/hop-dong-lao-dong', hopDongLaoDongRoutes);
+app.use('/api/bang-luong', bangLuongRoutes);
+app.use('/api/doanh-thu', doanhThuRoutes);
+app.use('/api/chi-phi', chiPhiRoutes);
+app.use('/api/bao-cao', baoCaoRoutes);
+app.use('/api/de-tai-nghien-cuu', deTaiNghienCuuRoutes);
+app.use('/api/tai-san', taiSanRoutes);
+app.use('/api/phong-cua-vien', phongCuaVienRoutes);
+app.use('/api/phong-ban', phongBanRoutes);
+app.use('/api/bao-hiem-y-te', baoHiemYTeRoutes);
+app.use('/api/thong-tin-xe', thongTinXeRoutes);
+app.use('/api/media-nhan-su', mediaNhanSuRoutes);
+app.use('/api/nhan-su-statistics', nhanSuStatisticsRoutes);
 
 // Test route
 app.get('/', (req, res) => {
