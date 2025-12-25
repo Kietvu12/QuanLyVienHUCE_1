@@ -389,6 +389,38 @@ export const deTaiNghienCuuAPI = {
   },
 };
 
+// ==================== DE TAI NGHIEN CUU STATISTICS API ====================
+
+export const deTaiNghienCuuStatisticsAPI = {
+  getStatistics: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/de-tai-nghien-cuu-statistics/statistics${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
+    return response;
+  },
+
+  getDistributionByStatus: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/de-tai-nghien-cuu-statistics/distribution-by-status${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
+    return response;
+  },
+
+  getDistributionByYear: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/de-tai-nghien-cuu-statistics/distribution-by-year${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
+    return response;
+  },
+
+  getDistributionByField: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/de-tai-nghien-cuu-statistics/distribution-by-field${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
+    return response;
+  },
+};
+
 // ==================== TAI SAN API ====================
 
 export const taiSanAPI = {

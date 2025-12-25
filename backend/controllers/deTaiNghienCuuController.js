@@ -1,15 +1,21 @@
 const db = require('../models');
 const { Op } = require('sequelize');
 
-// Lấy tất cả đề tài nghiên cứu (có thể filter theo id_vien, trang_thai)
+// Lấy tất cả đề tài nghiên cứu (có thể filter theo id_vien, trang_thai, linh_vuc, search)
 const getAllDeTaiNghienCuu = async (req, res) => {
   try {
-    const { id_vien, trang_thai, page = 1, limit = 10 } = req.query;
+    const { id_vien, trang_thai, linh_vuc, search, page = 1, limit = 10 } = req.query;
     const offset = (page - 1) * limit;
 
     const where = {};
     if (id_vien) where.id_vien = id_vien;
     if (trang_thai) where.trang_thai = trang_thai;
+    if (linh_vuc) where.linh_vuc = linh_vuc;
+    
+    // Search by ten_de_tai
+    if (search) {
+      where.ten_de_tai = { [Op.like]: `%${search}%` };
+    }
 
     const { count, rows } = await db.DeTaiNghienCuu.findAndCountAll({
       where,

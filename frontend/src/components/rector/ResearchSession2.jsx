@@ -11,31 +11,50 @@ import {
   Cell,
   Legend,
 } from 'recharts';
-import React from 'react';
-const statusData = [
-  { name: 'Đã hoàn thành', value: 98, color: '#10b981' },
-  { name: 'Đang thực hiện', value: 45, color: '#3b82f6' },
-  { name: 'Chờ duyệt', value: 13, color: '#f59e0b' },
-  { name: 'Chậm tiến độ', value: 13, color: '#ef4444' },
-];
-
-const yearlyData = [
-  { year: '2020', count: 120 },
-  { year: '2021', count: 135 },
-  { year: '2022', count: 142 },
-  { year: '2023', count: 148 },
-  { year: '2024', count: 152 },
-  { year: '2025', count: 156 },
-];
-
-const fieldData = [
-  { field: 'CNTT', fullField: 'Công nghệ thông tin', count: 65 },
-  { field: 'Xây dựng', fullField: 'Xây dựng', count: 42 },
-  { field: 'Kỹ thuật', fullField: 'Kỹ thuật', count: 28 },
-  { field: 'Khoa học', fullField: 'Khoa học', count: 21 },
-];
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { deTaiNghienCuuStatisticsAPI } from '../../services/api';
 
 const ResearchSession2 = () => {
+  const { user } = useAuth();
+  const [statusData, setStatusData] = useState([]);
+  const [yearlyData, setYearlyData] = useState([]);
+  const [fieldData, setFieldData] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [user?.id_vien]);
+
+  const fetchAllData = async () => {
+    try {
+      setLoading(true);
+      const params = { id_vien: user?.id_vien };
+
+      const [statusRes, yearRes, fieldRes] = await Promise.all([
+        deTaiNghienCuuStatisticsAPI.getDistributionByStatus(params),
+        deTaiNghienCuuStatisticsAPI.getDistributionByYear({ ...params, years: 6 }),
+        deTaiNghienCuuStatisticsAPI.getDistributionByField(params)
+      ]);
+
+      if (statusRes.success) {
+        setStatusData(statusRes.data);
+      }
+      if (yearRes.success) {
+        setYearlyData(yearRes.data);
+      }
+      if (fieldRes.success) {
+        setFieldData(fieldRes.data);
+      }
+    } catch (err) {
+      console.error('Error fetching research distribution data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalStatus = statusData.reduce((sum, item) => sum + item.value, 0);
+  const totalField = fieldData.reduce((sum, item) => sum + item.count, 0);
   return (
     <section className="px-6">
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -46,34 +65,40 @@ const ResearchSession2 = () => {
               Phân bố trạng thái
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              Tổng số đề tài: 169
+              Tổng số đề tài: {totalStatus}
             </p>
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={70}
-                  innerRadius={30}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value, name) => [value, name]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="text-gray-500">Đang tải...</div>
+            ) : statusData.length === 0 ? (
+              <div className="text-gray-500">Không có dữ liệu</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={70}
+                    innerRadius={30}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value, name) => [value, name]}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Legend personalizada */}
@@ -103,11 +128,16 @@ const ResearchSession2 = () => {
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart 
-                data={yearlyData} 
-                margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
-              >
+            {loading ? (
+              <div className="text-gray-500">Đang tải...</div>
+            ) : yearlyData.length === 0 ? (
+              <div className="text-gray-500">Không có dữ liệu</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart 
+                  data={yearlyData} 
+                  margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
+                >
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                 <XAxis
                   dataKey="year"
@@ -139,6 +169,7 @@ const ResearchSession2 = () => {
                 />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -149,17 +180,22 @@ const ResearchSession2 = () => {
               Phân bố theo lĩnh vực
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              Tổng số đề tài: 156
+              Tổng số đề tài: {totalField}
             </p>
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={fieldData}
-                layout="vertical"
-                margin={{ top: 10, right: 20, bottom: 10, left: 5 }}
-              >
+            {loading ? (
+              <div className="text-gray-500">Đang tải...</div>
+            ) : fieldData.length === 0 ? (
+              <div className="text-gray-500">Không có dữ liệu</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={fieldData}
+                  layout="vertical"
+                  margin={{ top: 10, right: 20, bottom: 10, left: 5 }}
+                >
                 <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
                 <XAxis 
                   type="number" 
@@ -203,6 +239,7 @@ const ResearchSession2 = () => {
                 />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>

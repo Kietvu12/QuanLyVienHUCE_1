@@ -1,5 +1,19 @@
 import { FaSearch, FaDownload, FaEye } from 'react-icons/fa';
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { deTaiNghienCuuAPI } from '../../services/api';
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN');
+};
+
+const formatCurrency = (value) => {
+  if (!value) return '0 đ';
+  return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(parseFloat(value)) + ' đ';
+};
+
 const completedProjects = [
   {
     id: 'DT-2024-045',
@@ -93,6 +107,96 @@ const getResultColor = (result) => {
 };
 
 const ResearchSession4 = () => {
+  const { user } = useAuth();
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedField, setSelectedField] = useState('');
+  const [selectedResult, setSelectedResult] = useState('');
+  const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
+
+  useEffect(() => {
+    fetchProjects();
+  }, [user?.id_vien, pagination.page, searchTerm, selectedField, selectedResult]);
+
+  const fetchProjects = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        id_vien: user?.id_vien,
+        trang_thai: 'hoan_thanh',
+        page: pagination.page,
+        limit: pagination.limit
+      };
+      if (selectedField) {
+        params.linh_vuc = selectedField;
+      }
+      if (searchTerm) {
+        params.search = searchTerm;
+      }
+
+      const response = await deTaiNghienCuuAPI.getAll(params);
+      if (response.success) {
+        let mappedProjects = (response.data || []).map(deTai => {
+          // Lấy người phụ trách (người đầu tiên trong danh sách)
+          const leader = deTai.nhanSuDeTais && deTai.nhanSuDeTais.length > 0
+            ? deTai.nhanSuDeTais[0].nhanSu?.ho_ten || '-'
+            : '-';
+
+          // Map danh_gia thành kết quả
+          let result = 'Khá';
+          if (deTai.danh_gia) {
+            const danhGia = deTai.danh_gia.toLowerCase();
+            if (danhGia.includes('xuất sắc') || danhGia.includes('excellent')) {
+              result = 'Xuất sắc';
+            } else if (danhGia.includes('tốt') || danhGia.includes('good')) {
+              result = 'Tốt';
+            } else if (danhGia.includes('khá') || danhGia.includes('fair')) {
+              result = 'Khá';
+            }
+          }
+
+          return {
+            id: deTai.id,
+            name: deTai.ten_de_tai,
+            leader: leader,
+            field: deTai.linh_vuc || '-',
+            startDate: deTai.ngay_bat_dau ? formatDate(deTai.ngay_bat_dau) : '-',
+            endDate: deTai.ngay_hoan_thanh ? formatDate(deTai.ngay_hoan_thanh) : '-',
+            completedDate: deTai.ngay_hoan_thanh ? formatDate(deTai.ngay_hoan_thanh) : '-',
+            status: 'Đã hoàn thành',
+            budget: formatCurrency(deTai.so_tien),
+            result: result,
+            rawData: deTai
+          };
+        });
+
+        // Filter by result if selected
+        if (selectedResult) {
+          const resultMap = {
+            'excellent': 'Xuất sắc',
+            'good': 'Tốt',
+            'fair': 'Khá'
+          };
+          const resultValue = resultMap[selectedResult];
+          if (resultValue) {
+            mappedProjects = mappedProjects.filter(p => p.result === resultValue);
+          }
+        }
+
+        setProjects(mappedProjects);
+        setPagination(prev => ({
+          ...prev,
+          total: response.pagination?.total || 0,
+          totalPages: response.pagination?.totalPages || 0
+        }));
+      }
+    } catch (err) {
+      console.error('Error fetching completed projects:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <section className="px-6">
       <div className="rounded-2xl bg-white shadow-sm px-6 py-5">
@@ -117,18 +221,37 @@ const ResearchSession4 = () => {
               <input
                 type="text"
                 placeholder="Tìm kiếm đề tài, mã đề tài, người phụ trách..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
                 className="w-full h-9 pl-10 pr-4 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
-          <select className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <select 
+            value={selectedField}
+            onChange={(e) => {
+              setSelectedField(e.target.value);
+              setPagination(prev => ({ ...prev, page: 1 }));
+            }}
+            className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
             <option value="">Tất cả lĩnh vực</option>
-            <option value="it">Công nghệ thông tin</option>
-            <option value="construction">Xây dựng</option>
-            <option value="engineering">Kỹ thuật</option>
-            <option value="science">Khoa học</option>
+            <option value="Công nghệ thông tin">Công nghệ thông tin</option>
+            <option value="Xây dựng">Xây dựng</option>
+            <option value="Kỹ thuật">Kỹ thuật</option>
+            <option value="Khoa học">Khoa học</option>
           </select>
-          <select className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <select 
+            value={selectedResult}
+            onChange={(e) => {
+              setSelectedResult(e.target.value);
+              setPagination(prev => ({ ...prev, page: 1 }));
+            }}
+            className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
             <option value="">Tất cả kết quả</option>
             <option value="excellent">Xuất sắc</option>
             <option value="good">Tốt</option>
@@ -168,10 +291,19 @@ const ResearchSession4 = () => {
               </tr>
             </thead>
             <tbody>
-              {completedProjects.map((project) => (
+              {loading ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-8 text-gray-500">Đang tải...</td>
+                </tr>
+              ) : projects.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-8 text-gray-500">Không có đề tài nào</td>
+                </tr>
+              ) : (
+                projects.map((project) => (
                 <tr key={project.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="py-4 px-4">
-                    <span className="text-sm font-medium text-blue-600">{project.id}</span>
+                    <span className="text-sm font-medium text-blue-600">DT-{project.id}</span>
                   </td>
                   <td className="py-4 px-4">
                     <span className="text-sm font-medium text-gray-900">{project.name}</span>
@@ -189,7 +321,7 @@ const ResearchSession4 = () => {
                   </td>
                   <td className="py-4 px-4 text-right">
                     <span className="text-sm font-semibold text-gray-900">
-                      {project.budget} đ
+                      {project.budget}
                     </span>
                   </td>
                   <td className="py-4 px-4 text-center">
@@ -205,19 +337,25 @@ const ResearchSession4 = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Mobile/Tablet Cards */}
         <div className="2xl:hidden space-y-4">
-          {completedProjects.map((project) => (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">Đang tải...</div>
+          ) : projects.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">Không có đề tài nào</div>
+          ) : (
+            projects.map((project) => (
             <div key={project.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-2">
-                    <span className="text-sm font-semibold text-blue-600">{project.id}</span>
+                    <span className="text-sm font-semibold text-blue-600">DT-{project.id}</span>
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
                       {project.field}
                     </span>
@@ -240,7 +378,7 @@ const ResearchSession4 = () => {
                 </div>
                 <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                   <span className="text-xs text-gray-600">Ngân sách:</span>
-                  <span className="text-sm font-semibold text-gray-900">{project.budget} đ</span>
+                  <span className="text-sm font-semibold text-gray-900">{project.budget}</span>
                 </div>
               </div>
 
@@ -250,32 +388,51 @@ const ResearchSession4 = () => {
                 </button>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Pagination */}
-        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-sm text-gray-600">
-            Hiển thị 1-6 của 98 kết quả
-          </p>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              Trước
-            </button>
-            <button className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-sm font-medium">
-              1
-            </button>
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              2
-            </button>
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              3
-            </button>
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              Sau
-            </button>
+        {pagination.totalPages > 1 && (
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-sm text-gray-600">
+              Hiển thị {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} của {pagination.total} kết quả
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                disabled={pagination.page === 1}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Trước
+              </button>
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                const pageNum = pagination.page <= 3 ? i + 1 : pagination.page - 2 + i;
+                if (pageNum > pagination.totalPages) return null;
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      pagination.page === pageNum
+                        ? 'bg-blue-500 text-white'
+                        : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                disabled={pagination.page >= pagination.totalPages}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Sau
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </section>
   );
