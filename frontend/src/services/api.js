@@ -247,6 +247,49 @@ export const doanhThuAPI = {
     });
     return response;
   },
+
+  // Upload media
+  uploadMedia: async (id, files) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('id', id);
+    
+    const fileArray = Array.from(files);
+    fileArray.forEach(file => {
+      formData.append('files', file);
+    });
+
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const response = await fetch(`${API_BASE_URL}/doanh-thu/${id}/media`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Upload failed');
+    }
+    return data;
+  },
+
+  // Xóa media
+  removeMedia: async (id, mediaId) => {
+    const response = await apiRequest(`/doanh-thu/${id}/media/${mediaId}`, {
+      method: 'DELETE',
+    });
+    return response;
+  },
+
+  // Thống kê doanh thu và chi phí
+  getStatistics: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/doanh-thu/statistics${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
+    return response;
+  },
 };
 
 // ==================== CHI PHI API ====================
@@ -284,6 +327,73 @@ export const chiPhiAPI = {
     const response = await apiRequest(`/chi-phi/${id}`, {
       method: 'DELETE',
     });
+    return response;
+  },
+
+  // Upload media
+  uploadMedia: async (id, files) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('id', id);
+    
+    const fileArray = Array.from(files);
+    fileArray.forEach(file => {
+      formData.append('files', file);
+    });
+
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const response = await fetch(`${API_BASE_URL}/chi-phi/${id}/media`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Upload failed');
+    }
+    return data;
+  },
+
+  // Xóa media
+  removeMedia: async (id, mediaId) => {
+    const response = await apiRequest(`/chi-phi/${id}/media/${mediaId}`, {
+      method: 'DELETE',
+    });
+    return response;
+  },
+};
+
+// ==================== NGHIA VU NOP API ====================
+
+export const nghiaVuNopAPI = {
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/nghia-vu-nop${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
+    return response;
+  },
+
+  getById: async (id) => {
+    const response = await apiRequest(`/nghia-vu-nop/${id}`);
+    return response;
+  },
+
+  thanhToanCongNo: async (data) => {
+    const response = await apiRequest('/nghia-vu-nop/thanh-toan', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  // Thống kê công nợ
+  getStatistics: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/nghia-vu-nop/statistics${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
     return response;
   },
 };
@@ -387,6 +497,66 @@ export const deTaiNghienCuuAPI = {
     });
     return response;
   },
+
+  // Thêm nhân sự vào đề tài
+  addNhanSu: async (id, data) => {
+    const response = await apiRequest(`/de-tai-nghien-cuu/${id}/nhan-su`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  // Upload tài liệu cho đề tài
+  uploadTaiLieu: async (id, files) => {
+    const token = localStorage.getItem('token');
+    const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api';
+    
+    const formData = new FormData();
+    const fileArray = Array.from(files);
+    fileArray.forEach(file => {
+      formData.append('files', file);
+    });
+
+    const response = await fetch(`${API_BASE_URL}/de-tai-nghien-cuu/${id}/tai-lieu`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Upload failed');
+    }
+    return data;
+  },
+
+  // Xóa nhân sự khỏi đề tài
+  removeNhanSu: async (id, nhanSuDeTaiId) => {
+    const response = await apiRequest(`/de-tai-nghien-cuu/${id}/nhan-su/${nhanSuDeTaiId}`, {
+      method: 'DELETE',
+    });
+    return response;
+  },
+
+  // Cập nhật nhân sự trong đề tài
+  updateNhanSu: async (id, nhanSuDeTaiId, data) => {
+    const response = await apiRequest(`/de-tai-nghien-cuu/${id}/nhan-su/${nhanSuDeTaiId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+    return response;
+  },
+
+  // Xóa tài liệu khỏi đề tài
+  removeTaiLieu: async (id, taiLieuId) => {
+    const response = await apiRequest(`/de-tai-nghien-cuu/${id}/tai-lieu/${taiLieuId}`, {
+      method: 'DELETE',
+    });
+    return response;
+  },
 };
 
 // ==================== DE TAI NGHIEN CUU STATISTICS API ====================
@@ -456,6 +626,13 @@ export const taiSanAPI = {
     const response = await apiRequest(`/tai-san/${id}`, {
       method: 'DELETE',
     });
+    return response;
+  },
+
+  getStatistics: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/tai-san/statistics${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
     return response;
   },
 };

@@ -214,15 +214,18 @@ const updateDeTaiNghienCuu = async (req, res) => {
       });
     }
 
-    // Kiểm tra: Khi cập nhật trạng thái sang hoàn thành, tiến độ phải đạt 100%
+    // Tự động đồng bộ tiến độ và trạng thái
+    let finalTienDo = tien_do !== undefined ? parseInt(tien_do) : deTai.tien_do;
+    let finalTrangThai = trang_thai !== undefined ? trang_thai : deTai.trang_thai;
+
+    // Nếu cập nhật trạng thái sang hoàn thành, tự động set tiến độ = 100%
     if (trang_thai === 'hoan_thanh') {
-      const finalTienDo = tien_do !== undefined ? parseInt(tien_do) : deTai.tien_do;
-      if (finalTienDo !== 100) {
-        return res.status(400).json({
-          success: false,
-          message: 'Khi cập nhật trạng thái sang hoàn thành, tiến độ phải đạt 100%'
-        });
-      }
+      finalTienDo = 100;
+    }
+    
+    // Nếu cập nhật tiến độ = 100%, tự động set trạng thái = hoàn thành
+    if (tien_do !== undefined && parseInt(tien_do) === 100) {
+      finalTrangThai = 'hoan_thanh';
     }
 
     // Kiểm tra viện nếu có thay đổi
@@ -241,8 +244,8 @@ const updateDeTaiNghienCuu = async (req, res) => {
       ten_de_tai: ten_de_tai !== undefined ? ten_de_tai : deTai.ten_de_tai,
       linh_vuc: linh_vuc !== undefined ? linh_vuc : deTai.linh_vuc,
       so_tien: so_tien !== undefined ? parseFloat(so_tien) : deTai.so_tien,
-      trang_thai: trang_thai !== undefined ? trang_thai : deTai.trang_thai,
-      tien_do: tien_do !== undefined ? parseInt(tien_do) : deTai.tien_do,
+      trang_thai: finalTrangThai,
+      tien_do: finalTienDo,
       ngay_bat_dau: ngay_bat_dau !== undefined ? ngay_bat_dau : deTai.ngay_bat_dau,
       ngay_hoan_thanh: ngay_hoan_thanh !== undefined ? ngay_hoan_thanh : deTai.ngay_hoan_thanh,
       danh_gia: danh_gia !== undefined ? danh_gia : deTai.danh_gia
@@ -302,11 +305,256 @@ const deleteDeTaiNghienCuu = async (req, res) => {
   }
 };
 
+// Thêm nhân sự vào đề tài
+const addNhanSuToDeTai = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { id_nhan_su, ten_nhan_su, chuyen_mon, vai_tro } = req.body;
+
+    // Kiểm tra đề tài tồn tại
+    const deTai = await db.DeTaiNghienCuu.findByPk(id);
+    if (!deTai) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy đề tài nghiên cứu'
+      });
+    }
+
+    // Kiểm tra nhân sự nếu có id_nhan_su
+    if (id_nhan_su) {
+      const nhanSu = await db.NhanSu.findByPk(id_nhan_su);
+      if (!nhanSu) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nhân sự không tồn tại'
+        });
+      }
+    }
+
+    const nhanSuDeTai = await db.NhanSuDeTai.create({
+      id_de_tai: id,
+      id_nhan_su: id_nhan_su || null,
+      ten_nhan_su: ten_nhan_su || null,
+      chuyen_mon: chuyen_mon || null,
+      vai_tro: vai_tro || 'thanh_vien'
+    });
+
+    const nhanSuDeTaiWithRelations = await db.NhanSuDeTai.findByPk(nhanSuDeTai.id, {
+      include: [
+        {
+          model: db.NhanSu,
+          as: 'nhanSu',
+          attributes: ['id', 'ho_ten'],
+          required: false
+        }
+      ]
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Thêm nhân sự vào đề tài thành công',
+      data: nhanSuDeTaiWithRelations
+    });
+  } catch (error) {
+    console.error('Lỗi khi thêm nhân sự vào đề tài:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi thêm nhân sự vào đề tài',
+      error: error.message
+    });
+  }
+};
+
+// Upload tài liệu cho đề tài
+const uploadTaiLieu = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const files = req.files || [];
+
+    // Kiểm tra đề tài tồn tại
+    const deTai = await db.DeTaiNghienCuu.findByPk(id);
+    if (!deTai) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy đề tài nghiên cứu'
+      });
+    }
+
+    if (files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn ít nhất một file'
+      });
+    }
+
+    const taiLieuDeTais = [];
+    for (const file of files) {
+      const taiLieu = await db.TaiLieuDeTai.create({
+        id_de_tai: id,
+        ten_tai_lieu: file.originalname,
+        duong_dan_tai_lieu: `/uploads/tai-lieu-de-tai/${file.filename}`
+      });
+      taiLieuDeTais.push(taiLieu);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Upload tài liệu thành công',
+      data: taiLieuDeTais
+    });
+  } catch (error) {
+    console.error('Lỗi khi upload tài liệu:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi upload tài liệu',
+      error: error.message
+    });
+  }
+};
+
+// Xóa nhân sự khỏi đề tài
+const removeNhanSuFromDeTai = async (req, res) => {
+  try {
+    const { id, nhanSuDeTaiId } = req.params;
+
+    // Kiểm tra đề tài tồn tại
+    const deTai = await db.DeTaiNghienCuu.findByPk(id);
+    if (!deTai) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy đề tài nghiên cứu'
+      });
+    }
+
+    // Kiểm tra nhân sự đề tài tồn tại và thuộc về đề tài này
+    const nhanSuDeTai = await db.NhanSuDeTai.findByPk(nhanSuDeTaiId);
+    if (!nhanSuDeTai || nhanSuDeTai.id_de_tai !== parseInt(id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy nhân sự trong đề tài'
+      });
+    }
+
+    await nhanSuDeTai.destroy();
+
+    res.json({
+      success: true,
+      message: 'Xóa nhân sự khỏi đề tài thành công'
+    });
+  } catch (error) {
+    console.error('Lỗi khi xóa nhân sự khỏi đề tài:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi xóa nhân sự khỏi đề tài',
+      error: error.message
+    });
+  }
+};
+
+// Cập nhật nhân sự trong đề tài
+const updateNhanSuInDeTai = async (req, res) => {
+  try {
+    const { id, nhanSuDeTaiId } = req.params;
+    const { chuyen_mon, vai_tro } = req.body;
+
+    // Kiểm tra đề tài tồn tại
+    const deTai = await db.DeTaiNghienCuu.findByPk(id);
+    if (!deTai) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy đề tài nghiên cứu'
+      });
+    }
+
+    // Kiểm tra nhân sự đề tài tồn tại và thuộc về đề tài này
+    const nhanSuDeTai = await db.NhanSuDeTai.findByPk(nhanSuDeTaiId);
+    if (!nhanSuDeTai || nhanSuDeTai.id_de_tai !== parseInt(id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy nhân sự trong đề tài'
+      });
+    }
+
+    await nhanSuDeTai.update({
+      chuyen_mon: chuyen_mon !== undefined ? chuyen_mon : nhanSuDeTai.chuyen_mon,
+      vai_tro: vai_tro !== undefined ? vai_tro : nhanSuDeTai.vai_tro
+    });
+
+    const updatedNhanSuDeTai = await db.NhanSuDeTai.findByPk(nhanSuDeTaiId, {
+      include: [
+        {
+          model: db.NhanSu,
+          as: 'nhanSu',
+          attributes: ['id', 'ho_ten'],
+          required: false
+        }
+      ]
+    });
+
+    res.json({
+      success: true,
+      message: 'Cập nhật nhân sự thành công',
+      data: updatedNhanSuDeTai
+    });
+  } catch (error) {
+    console.error('Lỗi khi cập nhật nhân sự:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi cập nhật nhân sự',
+      error: error.message
+    });
+  }
+};
+
+// Xóa tài liệu khỏi đề tài
+const removeTaiLieuFromDeTai = async (req, res) => {
+  try {
+    const { id, taiLieuId } = req.params;
+
+    // Kiểm tra đề tài tồn tại
+    const deTai = await db.DeTaiNghienCuu.findByPk(id);
+    if (!deTai) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy đề tài nghiên cứu'
+      });
+    }
+
+    // Kiểm tra tài liệu tồn tại và thuộc về đề tài này
+    const taiLieu = await db.TaiLieuDeTai.findByPk(taiLieuId);
+    if (!taiLieu || taiLieu.id_de_tai !== parseInt(id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy tài liệu'
+      });
+    }
+
+    await taiLieu.destroy();
+
+    res.json({
+      success: true,
+      message: 'Xóa tài liệu thành công'
+    });
+  } catch (error) {
+    console.error('Lỗi khi xóa tài liệu:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi xóa tài liệu',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllDeTaiNghienCuu,
   getDeTaiNghienCuuById,
   createDeTaiNghienCuu,
   updateDeTaiNghienCuu,
-  deleteDeTaiNghienCuu
+  deleteDeTaiNghienCuu,
+  addNhanSuToDeTai,
+  uploadTaiLieu,
+  removeNhanSuFromDeTai,
+  updateNhanSuInDeTai,
+  removeTaiLieuFromDeTai
 };
 

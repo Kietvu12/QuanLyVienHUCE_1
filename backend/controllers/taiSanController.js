@@ -294,8 +294,63 @@ const deleteTaiSan = async (req, res) => {
   }
 };
 
+// Thống kê tài sản
+const getTaiSanStatistics = async (req, res) => {
+  try {
+    const { id_vien } = req.query;
+
+    const where = {};
+    if (id_vien) where.id_vien = id_vien;
+
+    // Tổng số tài sản
+    const tongTaiSan = await db.TaiSan.count({ where });
+
+    // Thiết bị hỏng
+    const thietBiHong = await db.TaiSan.count({
+      where: {
+        ...where,
+        tinh_trang: 'hong'
+      }
+    });
+
+    // Thiết bị đang sử dụng
+    const dangSuDung = await db.TaiSan.count({
+      where: {
+        ...where,
+        tinh_trang: 'dang_su_dung'
+      }
+    });
+
+    // Thiết bị bảo trì
+    const baoTri = await db.TaiSan.count({
+      where: {
+        ...where,
+        tinh_trang: 'bao_tri'
+      }
+    });
+
+    res.json({
+      success: true,
+      data: {
+        tong_tai_san: tongTaiSan,
+        thiet_bi_hong: thietBiHong,
+        dang_su_dung: dangSuDung,
+        bao_tri: baoTri
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi khi lấy thống kê tài sản:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi lấy thống kê tài sản',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllTaiSan,
+  getTaiSanStatistics,
   getTaiSanById,
   createTaiSan,
   updateTaiSan,

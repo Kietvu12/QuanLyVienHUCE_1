@@ -8,37 +8,10 @@ import {
   ResponsiveContainer,
   AreaChart,
   Area,
-  LineChart,
-  Line,
 } from 'recharts';
-import React from 'react';
-const monthlyData = [
-  { month: 'T1', fullMonth: 'Tháng 1', thu: 200000000, chi: 150000000 },
-  { month: 'T2', fullMonth: 'Tháng 2', thu: 180000000, chi: 140000000 },
-  { month: 'T3', fullMonth: 'Tháng 3', thu: 220000000, chi: 160000000 },
-  { month: 'T4', fullMonth: 'Tháng 4', thu: 250000000, chi: 180000000 },
-  { month: 'T5', fullMonth: 'Tháng 5', thu: 280000000, chi: 200000000 },
-  { month: 'T6', fullMonth: 'Tháng 6', thu: 300000000, chi: 210000000 },
-  { month: 'T7', fullMonth: 'Tháng 7', thu: 320000000, chi: 220000000 },
-  { month: 'T8', fullMonth: 'Tháng 8', thu: 290000000, chi: 200000000 },
-  { month: 'T9', fullMonth: 'Tháng 9', thu: 310000000, chi: 215000000 },
-  { month: 'T10', fullMonth: 'Tháng 10', thu: 330000000, chi: 230000000 },
-  { month: 'T11', fullMonth: 'Tháng 11', thu: 350000000, chi: 240000000 },
-  { month: 'T12', fullMonth: 'Tháng 12', thu: 380000000, chi: 250000000 },
-];
-
-const dailyData = [
-  { day: '01', thu: 12000000, chi: 8000000 },
-  { day: '02', thu: 15000000, chi: 9000000 },
-  { day: '03', thu: 18000000, chi: 10000000 },
-  { day: '04', thu: 14000000, chi: 8500000 },
-  { day: '05', thu: 20000000, chi: 12000000 },
-  { day: '06', thu: 22000000, chi: 13000000 },
-  { day: '07', thu: 19000000, chi: 11000000 },
-  { day: '08', thu: 21000000, chi: 12500000 },
-  { day: '09', thu: 23000000, chi: 14000000 },
-  { day: '10', thu: 25000000, chi: 15000000 },
-];
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { doanhThuAPI, chiPhiAPI } from '../../services/api';
 
 const formatCurrency = (value) => {
   if (typeof value === 'number') {
@@ -48,6 +21,151 @@ const formatCurrency = (value) => {
 };
 
 const RevenueSession2 = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [monthlyData, setMonthlyData] = useState([]);
+  const [dailyData, setDailyData] = useState([]);
+
+  useEffect(() => {
+    fetchChartData();
+  }, [user?.id_vien]);
+
+  // Listen for revenue/expense updates
+  useEffect(() => {
+    const handleRevenueUpdate = () => {
+      fetchChartData();
+    };
+    
+    window.addEventListener('revenueUpdated', handleRevenueUpdate);
+    window.addEventListener('expenseUpdated', handleRevenueUpdate);
+    
+    return () => {
+      window.removeEventListener('revenueUpdated', handleRevenueUpdate);
+      window.removeEventListener('expenseUpdated', handleRevenueUpdate);
+    };
+  }, [user?.id_vien]); // Include user?.id_vien to ensure fetchChartData has access to it
+
+  const fetchChartData = async () => {
+    try {
+      setLoading(true);
+      
+      // Lấy dữ liệu 12 tháng gần nhất
+      const currentYear = new Date().getFullYear();
+      const monthlyStats = {};
+      
+      // Khởi tạo 12 tháng
+      for (let i = 1; i <= 12; i++) {
+        const monthKey = i.toString().padStart(2, '0');
+        monthlyStats[monthKey] = { thu: 0, chi: 0 };
+      }
+
+      // Lấy tất cả doanh thu và chi phí
+      const [thuResponse, chiResponse] = await Promise.all([
+        doanhThuAPI.getAll({ id_vien: user?.id_vien, limit: 10000 }),
+        chiPhiAPI.getAll({ id_vien: user?.id_vien, limit: 10000 })
+      ]);
+
+      // Tính toán theo tháng
+      if (thuResponse.success && thuResponse.data) {
+        thuResponse.data.forEach(item => {
+          if (item.trang_thai === 'da_nhan') {
+            // Sử dụng ngay_nhan_tien nếu có, nếu không thì dùng ngay_tao
+            const dateString = item.ngay_nhan_tien || item.ngay_tao;
+            if (dateString) {
+              const date = new Date(dateString);
+              if (date.getFullYear() === currentYear) {
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                if (monthlyStats[month]) {
+                  monthlyStats[month].thu += parseFloat(item.so_tien) || 0;
+                }
+              }
+            }
+          }
+        });
+      }
+
+      if (chiResponse.success && chiResponse.data) {
+        chiResponse.data.forEach(item => {
+          if (item.trang_thai === 'da_tat_toan') {
+            // Sử dụng ngay_tat_toan nếu có, nếu không thì dùng ngay_tao
+            const dateString = item.ngay_tat_toan || item.ngay_tao;
+            if (dateString) {
+              const date = new Date(dateString);
+              if (date.getFullYear() === currentYear) {
+                const month = (date.getMonth() + 1).toString().padStart(2, '0');
+                if (monthlyStats[month]) {
+                  monthlyStats[month].chi += parseFloat(item.so_tien) || 0;
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // Format dữ liệu tháng
+      const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
+                          'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
+      const formattedMonthlyData = Object.keys(monthlyStats).map((month, index) => ({
+        month: `T${parseInt(month)}`,
+        fullMonth: monthNames[index],
+        thu: monthlyStats[month].thu,
+        chi: monthlyStats[month].chi
+      }));
+
+      setMonthlyData(formattedMonthlyData);
+
+      // Tính toán 10 ngày gần nhất
+      const today = new Date();
+      const dailyStats = {};
+      
+      for (let i = 9; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        const dateKey = date.toISOString().split('T')[0];
+        const dayKey = date.getDate().toString().padStart(2, '0');
+        dailyStats[dateKey] = { day: dayKey, thu: 0, chi: 0 };
+      }
+
+      if (thuResponse.success && thuResponse.data) {
+        thuResponse.data.forEach(item => {
+          if (item.trang_thai === 'da_nhan') {
+            // Sử dụng ngay_nhan_tien nếu có, nếu không thì dùng ngay_tao
+            const dateString = item.ngay_nhan_tien || item.ngay_tao;
+            if (dateString) {
+              const dateKey = dateString.split('T')[0];
+              if (dailyStats[dateKey]) {
+                dailyStats[dateKey].thu += parseFloat(item.so_tien) || 0;
+              }
+            }
+          }
+        });
+      }
+
+      if (chiResponse.success && chiResponse.data) {
+        chiResponse.data.forEach(item => {
+          if (item.trang_thai === 'da_tat_toan') {
+            // Sử dụng ngay_tat_toan nếu có, nếu không thì dùng ngay_tao
+            const dateString = item.ngay_tat_toan || item.ngay_tao;
+            if (dateString) {
+              const dateKey = dateString.split('T')[0];
+              if (dailyStats[dateKey]) {
+                dailyStats[dateKey].chi += parseFloat(item.so_tien) || 0;
+              }
+            }
+          }
+        });
+      }
+
+      const formattedDailyData = Object.values(dailyStats);
+      setDailyData(formattedDailyData);
+
+    } catch (err) {
+      console.error('Error fetching chart data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="px-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -65,8 +183,11 @@ const RevenueSession2 = () => {
           </div>
 
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={monthlyData} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+            {loading ? (
+              <div className="flex items-center justify-center h-full text-gray-500">Đang tải...</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={monthlyData} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
                 <XAxis
                   dataKey="month"
@@ -108,6 +229,7 @@ const RevenueSession2 = () => {
                 />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           <div className="mt-4 flex items-center gap-6 text-xs">
@@ -136,8 +258,11 @@ const RevenueSession2 = () => {
           </div>
 
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={dailyData} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+            {loading ? (
+              <div className="flex items-center justify-center h-full text-gray-500">Đang tải...</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={dailyData} margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
                 <defs>
                   <linearGradient id="colorThu" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
@@ -188,6 +313,7 @@ const RevenueSession2 = () => {
                 />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           <div className="mt-4 flex items-center gap-6 text-xs">

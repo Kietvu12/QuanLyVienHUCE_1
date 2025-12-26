@@ -3,6 +3,7 @@ const router = express.Router();
 const taiSanController = require('../controllers/taiSanController');
 
 router.get('/', taiSanController.getAllTaiSan);
+router.get('/statistics', taiSanController.getTaiSanStatistics);
 router.get('/:id', taiSanController.getTaiSanById);
 router.post('/', taiSanController.createTaiSan);
 router.put('/:id', taiSanController.updateTaiSan);

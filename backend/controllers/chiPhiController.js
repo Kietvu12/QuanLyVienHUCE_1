@@ -294,11 +294,108 @@ const deleteChiPhi = async (req, res) => {
   }
 };
 
+// Upload media cho chi phí
+const uploadMediaChiPhi = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const files = req.files || [];
+
+    // Kiểm tra chi phí tồn tại
+    const chiPhi = await db.ChiPhi.findByPk(id);
+    if (!chiPhi) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chi phí'
+      });
+    }
+
+    if (files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn ít nhất một file'
+      });
+    }
+
+    const mediaChiPhis = [];
+    for (const file of files) {
+      const media = await db.MediaChiPhi.create({
+        id_chi_phi: id,
+        duong_dan_tai_lieu: `/uploads/media-chi-phi/${file.filename}`
+      });
+      mediaChiPhis.push(media);
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Upload media thành công',
+      data: mediaChiPhis
+    });
+  } catch (error) {
+    console.error('Lỗi khi upload media chi phí:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi upload media chi phí',
+      error: error.message
+    });
+  }
+};
+
+// Xóa media chi phí
+const removeMediaChiPhi = async (req, res) => {
+  try {
+    const { id, mediaId } = req.params;
+
+    // Kiểm tra chi phí tồn tại
+    const chiPhi = await db.ChiPhi.findByPk(id);
+    if (!chiPhi) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chi phí'
+      });
+    }
+
+    // Kiểm tra media tồn tại
+    const media = await db.MediaChiPhi.findByPk(mediaId);
+    if (!media || media.id_chi_phi !== parseInt(id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy media'
+      });
+    }
+
+    // Xóa file vật lý nếu có
+    if (media.duong_dan_tai_lieu) {
+      const fs = require('fs');
+      const path = require('path');
+      const filePath = path.join(__dirname, '..', media.duong_dan_tai_lieu);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    await media.destroy();
+
+    res.json({
+      success: true,
+      message: 'Xóa media thành công'
+    });
+  } catch (error) {
+    console.error('Lỗi khi xóa media chi phí:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi xóa media chi phí',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllChiPhi,
   getChiPhiById,
   createChiPhi,
   updateChiPhi,
-  deleteChiPhi
+  deleteChiPhi,
+  uploadMediaChiPhi,
+  removeMediaChiPhi
 };
 

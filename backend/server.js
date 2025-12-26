@@ -36,6 +36,7 @@ const baoHiemYTeRoutes = require('./routes/baoHiemYTeRoutes');
 const thongTinXeRoutes = require('./routes/thongTinXeRoutes');
 const mediaNhanSuRoutes = require('./routes/mediaNhanSuRoutes');
 const nhanSuStatisticsRoutes = require('./routes/nhanSuStatisticsRoutes');
+const nghiaVuNopRoutes = require('./routes/nghiaVuNopRoutes');
 
 // Auth routes (public)
 app.use('/api/auth', authRoutes);
@@ -57,6 +58,7 @@ app.use('/api/bao-hiem-y-te', baoHiemYTeRoutes);
 app.use('/api/thong-tin-xe', thongTinXeRoutes);
 app.use('/api/media-nhan-su', mediaNhanSuRoutes);
 app.use('/api/nhan-su-statistics', nhanSuStatisticsRoutes);
+app.use('/api/nghia-vu-nop', nghiaVuNopRoutes);
 
 // Test route
 app.get('/', (req, res) => {

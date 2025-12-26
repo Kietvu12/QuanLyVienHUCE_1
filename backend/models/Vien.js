@@ -69,6 +69,12 @@ module.exports = (sequelize) => {
       foreignKey: 'id_vien',
       as: 'baoCaos'
     });
+
+    // Một viện có nhiều nghĩa vụ nộp
+    Vien.hasMany(models.NghiaVuNop, {
+      foreignKey: 'id_vien',
+      as: 'nghiaVuNops'
+    });
   };
 
   return Vien;
