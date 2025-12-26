@@ -514,9 +514,9 @@ const RevenueSession3 = () => {
               Thêm thu
             </button>
             <button className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors">
-              <FaDownload className="w-4 h-4" />
-              Xuất Excel
-            </button>
+            <FaDownload className="w-4 h-4" />
+            Xuất Excel
+          </button>
           </div>
         </div>
 
@@ -664,16 +664,16 @@ const RevenueSession3 = () => {
                         </button>
                       </div>
                     ) : (
-                      <span
+                    <span
                         className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(item.statusCode)}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           handleStartEditStatus(item);
                         }}
                         title="Click để sửa trạng thái"
-                      >
-                        {item.status}
-                      </span>
+                    >
+                      {item.status}
+                    </span>
                     )}
                   </td>
                 </tr>
@@ -761,16 +761,16 @@ const RevenueSession3 = () => {
                     </button>
                   </div>
                 ) : (
-                  <span
+                <span
                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity ${getStatusColor(item.statusCode)}`}
                     onClick={(e) => {
                       e.stopPropagation();
                       handleStartEditStatus(item);
                     }}
                     title="Click để sửa trạng thái"
-                  >
-                    {item.status}
-                  </span>
+                >
+                  {item.status}
+                </span>
                 )}
               </div>
             </div>
@@ -780,18 +780,18 @@ const RevenueSession3 = () => {
 
         {/* Pagination */}
         {pagination.totalPages > 1 && (
-          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p className="text-sm text-gray-600">
+        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <p className="text-sm text-gray-600">
               Hiển thị {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} của {pagination.total} kết quả
-            </p>
-            <div className="flex items-center gap-2">
+          </p>
+          <div className="flex items-center gap-2">
               <button
                 onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
                 disabled={pagination.page === 1}
                 className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Trước
-              </button>
+              Trước
+            </button>
               {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
                 const pageNum = pagination.page <= 3 ? i + 1 : pagination.page - 2 + i;
                 if (pageNum > pagination.totalPages) return null;
@@ -806,7 +806,7 @@ const RevenueSession3 = () => {
                     }`}
                   >
                     {pageNum}
-                  </button>
+            </button>
                 );
               })}
               <button
@@ -814,10 +814,10 @@ const RevenueSession3 = () => {
                 disabled={pagination.page >= pagination.totalPages}
                 className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sau
-              </button>
-            </div>
+              Sau
+            </button>
           </div>
+        </div>
         )}
       </div>
 
@@ -1166,7 +1166,7 @@ const RevenueSession3 = () => {
               </div>
             </form>
           </div>
-        </div>
+      </div>
       )}
     </section>
   );

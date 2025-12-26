@@ -1,6 +1,6 @@
 import { FaSearch, FaPlus, FaEdit, FaTrash, FaEye, FaBuilding, FaFileContract, FaShieldAlt, FaCar, FaUpload, FaTimes } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
-import { nhanSuAPI, phongBanAPI, hopDongLaoDongAPI, baoHiemYTeAPI, thongTinXeAPI, mediaNhanSuAPI } from '../../services/api';
+import { nhanSuAPI, phongBanAPI, hopDongLaoDongAPI, loaiHopDongAPI, baoHiemYTeAPI, thongTinXeAPI, mediaNhanSuAPI } from '../../services/api';
 import React, { useState, useEffect } from 'react';
 
 const formatCurrency = (value) => {
@@ -331,6 +331,7 @@ const NhanSuTab = ({ user, isReadOnly }) => {
     id_phong_ban: '',
     ho_ten: '',
     ngay_sinh: '',
+    gioi_tinh: '',
     chuc_vu: '',
     dia_chi_tam_tru: '',
     dia_chi_thuong_tru: '',
@@ -410,6 +411,7 @@ const NhanSuTab = ({ user, isReadOnly }) => {
       id_phong_ban: '',
       ho_ten: '',
       ngay_sinh: '',
+      gioi_tinh: '',
       chuc_vu: '',
       dia_chi_tam_tru: '',
       dia_chi_thuong_tru: '',
@@ -435,6 +437,7 @@ const NhanSuTab = ({ user, isReadOnly }) => {
           id_phong_ban: data.id_phong_ban || '',
           ho_ten: data.ho_ten || '',
           ngay_sinh: data.ngay_sinh ? data.ngay_sinh.split('T')[0] : '',
+          gioi_tinh: data.gioi_tinh || '',
           chuc_vu: data.chuc_vu || '',
           dia_chi_tam_tru: data.dia_chi_tam_tru || '',
           dia_chi_thuong_tru: data.dia_chi_thuong_tru || '',
@@ -643,6 +646,9 @@ const NhanSuTab = ({ user, isReadOnly }) => {
                   Chức vụ
                 </th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Giới tính
+                </th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                   Phòng ban
                 </th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
@@ -678,6 +684,9 @@ const NhanSuTab = ({ user, isReadOnly }) => {
                       </td>
                       <td className="py-4 px-4">
                         <span className="text-sm text-gray-700">{person.chuc_vu || '-'}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-700">{person.gioi_tinh || '-'}</span>
                       </td>
                       <td className="py-4 px-4">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
@@ -919,6 +928,20 @@ const NhanSuTab = ({ user, isReadOnly }) => {
                 </div>
 
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Giới tính</label>
+                  <select
+                    value={formData.gioi_tinh}
+                    onChange={(e) => setFormData({ ...formData, gioi_tinh: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Chọn giới tính</option>
+                    <option value="Nam">Nam</option>
+                    <option value="Nữ">Nữ</option>
+                    <option value="Khác">Khác</option>
+                  </select>
+                </div>
+
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">Chức vụ</label>
                   <select
                     value={formData.chuc_vu}
@@ -1118,6 +1141,10 @@ const DetailModal = ({ nhanSu, onClose, onViewProfile, isReadOnly }) => {
             <div>
               <label className="text-sm font-medium text-gray-500">Ngày sinh</label>
               <p className="text-base text-gray-900 mt-1">{formatDate(nhanSu.ngay_sinh)}</p>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-500">Giới tính</label>
+              <p className="text-base text-gray-900 mt-1">{nhanSu.gioi_tinh || '-'}</p>
             </div>
             <div>
               <label className="text-sm font-medium text-gray-500">Chức vụ</label>
@@ -1822,15 +1849,39 @@ const XeTab = ({ thongTinXes, nhanSuId, onAdd, onEdit, onDelete, onRefresh, medi
 const AddEditModal = ({ type, nhanSuId, editingItem, onClose, onSuccess }) => {
   const [formData, setFormData] = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [loaiHopDongs, setLoaiHopDongs] = useState([]);
+
+  useEffect(() => {
+    // Load loại hợp đồng nếu là form hợp đồng
+    if (type === 'hop-dong') {
+      const fetchLoaiHopDongs = async () => {
+        try {
+          const response = await loaiHopDongAPI.getAll();
+          if (response.success) {
+            setLoaiHopDongs(response.data || []);
+          }
+        } catch (err) {
+          console.error('Error fetching loai hop dong:', err);
+        }
+      };
+      fetchLoaiHopDongs();
+    }
+  }, [type]);
 
   useEffect(() => {
     if (editingItem) {
-      setFormData(editingItem);
+      // Nếu editingItem có loaiHopDong object, lấy id
+      const formDataFromItem = {
+        ...editingItem,
+        id_loai_hop_dong: editingItem.id_loai_hop_dong || editingItem.loaiHopDong?.id || ''
+      };
+      setFormData(formDataFromItem);
     } else {
       // Reset form based on type
       if (type === 'hop-dong') {
         setFormData({
           id_nhan_su: nhanSuId,
+          id_loai_hop_dong: '',
           ma_hop_dong: '',
           ngay_tao_hop_dong_lao_dong: '',
           luong_theo_hop_dong: '',
@@ -1918,6 +1969,23 @@ const AddEditModal = ({ type, nhanSuId, editingItem, onClose, onSuccess }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           {type === 'hop-dong' && (
             <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Loại hợp đồng
+                </label>
+                <select
+                  value={formData.id_loai_hop_dong || ''}
+                  onChange={(e) => setFormData({ ...formData, id_loai_hop_dong: e.target.value || null })}
+                  className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">Chọn loại hợp đồng</option>
+                  {loaiHopDongs.map((loai) => (
+                    <option key={loai.id} value={loai.id}>
+                      {loai.ten_loai}
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Mã hợp đồng <span className="text-red-500">*</span>

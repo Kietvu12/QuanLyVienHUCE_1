@@ -1,41 +1,88 @@
-import { FaFileAlt, FaCheckCircle, FaClock, FaDownload, FaPaperPlane, FaTimesCircle } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaFileAlt, FaCheckCircle, FaClock, FaDownload, FaPaperPlane, FaTimesCircle, FaSpinner } from 'react-icons/fa';
+import { useAuth } from '../../context/AuthContext';
+import { baoCaoAPI } from '../../services/api';
 import React from 'react';
-const summaryCards = [
-  {
-    label: 'Tổng báo cáo',
-    value: '156',
-    change: '+12',
-    changeColor: 'text-emerald-500',
-    icon: FaFileAlt,
-    iconBg: 'bg-blue-500',
-  },
-  {
-    label: 'Đã duyệt',
-    value: '98',
-    change: '+8',
-    changeColor: 'text-emerald-500',
-    icon: FaCheckCircle,
-    iconBg: 'bg-emerald-500',
-  },
-  {
-    label: 'Đang chờ duyệt',
-    value: '32',
-    change: '+5',
-    changeColor: 'text-yellow-500',
-    icon: FaClock,
-    iconBg: 'bg-yellow-500',
-  },
-  {
-    label: 'Từ chối',
-    value: '8',
-    change: '-2',
-    changeColor: 'text-red-500',
-    icon: FaTimesCircle,
-    iconBg: 'bg-red-500',
-  },
-];
 
 const ReportSession1 = () => {
+  const { user } = useAuth();
+  const [statistics, setStatistics] = useState({
+    total: 0,
+    daDuyet: 0,
+    choPheDuyet: 0,
+    tuChoi: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchStatistics = async () => {
+      if (!user?.id) return;
+      
+      setLoading(true);
+      try {
+        // Lấy tất cả báo cáo để tính thống kê
+        const params = {
+          id_vien: user.id_vien || undefined,
+          id_nguoi_tao: user.id,
+          limit: 1000, // Lấy nhiều để tính thống kê
+        };
+
+        const response = await baoCaoAPI.getAll(params);
+        
+        if (response.success) {
+          const reports = response.data || [];
+          const stats = {
+            total: reports.length,
+            daDuyet: reports.filter(r => r.trang_thai === 'da_phe_duyet').length,
+            choPheDuyet: reports.filter(r => r.trang_thai === 'cho_phe_duyet').length,
+            tuChoi: reports.filter(r => r.trang_thai === 'tu_choi').length,
+          };
+          setStatistics(stats);
+        }
+      } catch (error) {
+        console.error('Lỗi khi lấy thống kê báo cáo:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStatistics();
+  }, [user]);
+
+  const summaryCards = [
+    {
+      label: 'Tổng báo cáo',
+      value: loading ? '...' : statistics.total.toString(),
+      change: '',
+      changeColor: 'text-emerald-500',
+      icon: FaFileAlt,
+      iconBg: 'bg-blue-500',
+    },
+    {
+      label: 'Đã duyệt',
+      value: loading ? '...' : statistics.daDuyet.toString(),
+      change: '',
+      changeColor: 'text-emerald-500',
+      icon: FaCheckCircle,
+      iconBg: 'bg-emerald-500',
+    },
+    {
+      label: 'Đang chờ duyệt',
+      value: loading ? '...' : statistics.choPheDuyet.toString(),
+      change: '',
+      changeColor: 'text-yellow-500',
+      icon: FaClock,
+      iconBg: 'bg-yellow-500',
+    },
+    {
+      label: 'Từ chối',
+      value: loading ? '...' : statistics.tuChoi.toString(),
+      change: '',
+      changeColor: 'text-red-500',
+      icon: FaTimesCircle,
+      iconBg: 'bg-red-500',
+    },
+  ];
   return (
     <section className="px-6">
       {/* Filtros */}

@@ -348,12 +348,130 @@ const getTaiSanStatistics = async (req, res) => {
   }
 };
 
+// Upload media cho tài sản
+const uploadMediaTaiSan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const anh_phieu_nhan = req.files?.anh_phieu_nhan?.[0];
+    const anh_tai_san = req.files?.anh_tai_san?.[0];
+
+    // Kiểm tra tài sản tồn tại
+    const taiSan = await db.TaiSan.findByPk(id);
+    if (!taiSan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy tài sản'
+      });
+    }
+
+    // Kiểm tra xem đã có media chưa
+    let mediaTaiSan = await db.MediaTaiSan.findOne({
+      where: { id_tai_san: id }
+    });
+
+    const mediaData = {};
+    if (anh_phieu_nhan) {
+      mediaData.anh_phieu_nhan = `/uploads/media-tai-san/${anh_phieu_nhan.filename}`;
+    }
+    if (anh_tai_san) {
+      mediaData.anh_tai_san = `/uploads/media-tai-san/${anh_tai_san.filename}`;
+    }
+
+    if (mediaTaiSan) {
+      // Cập nhật media hiện có
+      await mediaTaiSan.update(mediaData);
+    } else {
+      // Tạo media mới
+      mediaTaiSan = await db.MediaTaiSan.create({
+        id_tai_san: id,
+        ...mediaData
+      });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: 'Upload media thành công',
+      data: mediaTaiSan
+    });
+  } catch (error) {
+    console.error('Lỗi khi upload media tài sản:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi upload media tài sản',
+      error: error.message
+    });
+  }
+};
+
+// Xóa media tài sản
+const removeMediaTaiSan = async (req, res) => {
+  try {
+    const { id, mediaId } = req.params;
+
+    // Kiểm tra tài sản tồn tại
+    const taiSan = await db.TaiSan.findByPk(id);
+    if (!taiSan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy tài sản'
+      });
+    }
+
+    // Kiểm tra media tồn tại
+    const media = await db.MediaTaiSan.findByPk(mediaId);
+    if (!media || media.id_tai_san !== parseInt(id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy media'
+      });
+    }
+
+    // Xóa file vật lý nếu có
+    const fs = require('fs');
+    const path = require('path');
+    if (media.anh_phieu_nhan) {
+      const filePath = path.join(__dirname, '..', media.anh_phieu_nhan);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    if (media.anh_tai_san) {
+      const filePath = path.join(__dirname, '..', media.anh_tai_san);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+    if (media.anh_phieu_ban_giao) {
+      const filePath = path.join(__dirname, '..', media.anh_phieu_ban_giao);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
+    await media.destroy();
+
+    res.json({
+      success: true,
+      message: 'Xóa media thành công'
+    });
+  } catch (error) {
+    console.error('Lỗi khi xóa media tài sản:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi xóa media tài sản',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllTaiSan,
   getTaiSanStatistics,
   getTaiSanById,
   createTaiSan,
   updateTaiSan,
-  deleteTaiSan
+  deleteTaiSan,
+  uploadMediaTaiSan,
+  removeMediaTaiSan
 };
 

@@ -489,6 +489,38 @@ const tuChoiBaoCao = async (req, res) => {
   }
 };
 
+// Upload file cho báo cáo
+const uploadFileBaoCao = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn file để upload'
+      });
+    }
+
+    // Trả về đường dẫn file
+    const filePath = `/uploads/bao-cao/${req.file.filename}`;
+    
+    res.json({
+      success: true,
+      message: 'Upload file thành công',
+      data: {
+        filePath: filePath,
+        fileName: req.file.originalname,
+        fileSize: req.file.size
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi khi upload file báo cáo:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi upload file',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllBaoCao,
   getBaoCaoById,
@@ -497,6 +529,7 @@ module.exports = {
   deleteBaoCao,
   guiBaoCao,
   pheDuyetBaoCao,
-  tuChoiBaoCao
+  tuChoiBaoCao,
+  uploadFileBaoCao
 };
 

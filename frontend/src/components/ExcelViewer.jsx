@@ -1,12 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import * as XLSX from 'xlsx';
-import { FaFileExcel, FaSpinner, FaExclamationTriangle } from 'react-icons/fa';
+import { FaFileExcel, FaSpinner, FaExclamationTriangle, FaDownload, FaEdit } from 'react-icons/fa';
 import React from 'react';
-const ExcelViewer = ({ filePath, fileName, defaultSheet = null }) => {
+
+const ExcelViewer = forwardRef(({ filePath, fileName, defaultSheet = null, allowedSheets = null, onExport = null }, ref) => {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedSheet, setSelectedSheet] = useState(null);
+  const [editingCell, setEditingCell] = useState(null); // { rowIndex, colIndex }
+  const [editValue, setEditValue] = useState('');
+  const inputRef = useRef(null);
 
   useEffect(() => {
     const loadExcelFile = async () => {
@@ -23,12 +27,18 @@ const ExcelViewer = ({ filePath, fileName, defaultSheet = null }) => {
 
         const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
 
+        // Lọc sheet names nếu có allowedSheets
+        let sheetNamesToProcess = workbook.SheetNames;
+        if (allowedSheets && Array.isArray(allowedSheets) && allowedSheets.length > 0) {
+          sheetNamesToProcess = workbook.SheetNames.filter(name => allowedSheets.includes(name));
+        }
+
         const result = {
-          sheetNames: workbook.SheetNames,
+          sheetNames: sheetNamesToProcess,
           sheets: {},
         };
 
-        workbook.SheetNames.forEach((sheetName) => {
+        sheetNamesToProcess.forEach((sheetName) => {
           const worksheet = workbook.Sheets[sheetName];
           const jsonData = XLSX.utils.sheet_to_json(worksheet, {
             header: 1,
@@ -171,7 +181,69 @@ const ExcelViewer = ({ filePath, fileName, defaultSheet = null }) => {
     if (filePath) {
       loadExcelFile();
     }
-  }, [filePath, fileName, defaultSheet]);
+  }, [filePath, fileName, defaultSheet, allowedSheets]);
+
+  // Focus vào input khi bắt đầu edit
+  useEffect(() => {
+    if (editingCell && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editingCell]);
+
+  // Expose method để lấy workbook từ bên ngoài
+  useImperativeHandle(ref, () => ({
+    getWorkbook: () => {
+      if (!data) return null;
+      
+      try {
+        // Tạo workbook mới
+        const workbook = XLSX.utils.book_new();
+        
+        // Xử lý từng sheet
+        data.sheetNames.forEach((sheetName) => {
+          const sheetData = data.sheets[sheetName];
+          const tableData = sheetData.table || [];
+          
+          // Chuyển đổi table data thành worksheet
+          const worksheet = XLSX.utils.aoa_to_sheet(tableData);
+          
+          // Áp dụng column widths nếu có
+          if (sheetData.columnWidths && sheetData.columnWidths.length > 0) {
+            worksheet['!cols'] = sheetData.columnWidths.map(col => ({
+              wch: col.width ? Math.round(col.width / 7) : 10,
+              hidden: col.hidden || false,
+            }));
+          }
+          
+          // Áp dụng row heights nếu có
+          if (sheetData.rowHeights && sheetData.rowHeights.length > 0) {
+            worksheet['!rows'] = sheetData.rowHeights.map(row => ({
+              hpt: row.height ? Math.round(row.height * 0.75) : null,
+              hidden: row.hidden || false,
+            }));
+          }
+          
+          // Áp dụng merges nếu có
+          if (sheetData.merges && sheetData.merges.length > 0) {
+            worksheet['!merges'] = sheetData.merges.map(merge => {
+              const start = XLSX.utils.decode_cell(merge.start);
+              const end = XLSX.utils.decode_cell(merge.end);
+              return { s: start, e: end };
+            });
+          }
+          
+          // Thêm worksheet vào workbook
+          XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+        });
+        
+        return workbook;
+      } catch (err) {
+        console.error('Lỗi khi tạo workbook:', err);
+        return null;
+      }
+    }
+  }), [data]);
 
   if (loading) {
     return (
@@ -309,6 +381,126 @@ const ExcelViewer = ({ filePath, fileName, defaultSheet = null }) => {
     return row?.height ? `${row.height}px` : 'auto';
   };
 
+  // Hàm xử lý khi click vào cell để edit
+  const handleCellClick = (rowIndex, colIndex) => {
+    // Không cho edit header row (row 0)
+    if (rowIndex === 0) return;
+    
+    // Không cho edit merged cell (không phải cell đầu)
+    if (isMergedCell(rowIndex, colIndex)) return;
+    
+    const cellValue = tableData[rowIndex]?.[colIndex] || '';
+    setEditingCell({ rowIndex, colIndex });
+    setEditValue(cellValue);
+  };
+
+  // Hàm xử lý khi lưu giá trị đã chỉnh sửa
+  const handleCellSave = () => {
+    if (!editingCell) return;
+    
+    const { rowIndex, colIndex } = editingCell;
+    const newData = { ...data };
+    const sheetData = { ...newData.sheets[selectedSheet] };
+    const newTable = [...sheetData.table];
+    
+    // Đảm bảo row tồn tại
+    if (!newTable[rowIndex]) {
+      newTable[rowIndex] = [];
+    }
+    
+    // Cập nhật giá trị cell
+    newTable[rowIndex][colIndex] = editValue;
+    sheetData.table = newTable;
+    newData.sheets[selectedSheet] = sheetData;
+    
+    setData(newData);
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  // Hàm xử lý khi hủy edit
+  const handleCellCancel = () => {
+    setEditingCell(null);
+    setEditValue('');
+  };
+
+  // Hàm xử lý khi nhấn Enter hoặc Escape
+  const handleCellKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleCellSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCellCancel();
+    }
+  };
+
+  // Hàm xuất file Excel
+  const handleExport = () => {
+    if (!data) return;
+    
+    try {
+      // Tạo workbook mới
+      const workbook = XLSX.utils.book_new();
+      
+      // Xử lý từng sheet
+      data.sheetNames.forEach((sheetName) => {
+        const sheetData = data.sheets[sheetName];
+        const tableData = sheetData.table || [];
+        
+        // Chuyển đổi table data thành worksheet
+        const worksheet = XLSX.utils.aoa_to_sheet(tableData);
+        
+        // Áp dụng column widths nếu có
+        if (sheetData.columnWidths && sheetData.columnWidths.length > 0) {
+          worksheet['!cols'] = sheetData.columnWidths.map(col => ({
+            wch: col.width ? Math.round(col.width / 7) : 10, // Chuyển đổi px sang character width
+            hidden: col.hidden || false,
+          }));
+        }
+        
+        // Áp dụng row heights nếu có
+        if (sheetData.rowHeights && sheetData.rowHeights.length > 0) {
+          worksheet['!rows'] = sheetData.rowHeights.map(row => ({
+            hpt: row.height ? Math.round(row.height * 0.75) : null, // Chuyển đổi px sang points
+            hidden: row.hidden || false,
+          }));
+        }
+        
+        // Áp dụng merges nếu có
+        if (sheetData.merges && sheetData.merges.length > 0) {
+          worksheet['!merges'] = sheetData.merges.map(merge => {
+            const start = XLSX.utils.decode_cell(merge.start);
+            const end = XLSX.utils.decode_cell(merge.end);
+            return { s: start, e: end };
+          });
+        }
+        
+        // Thêm worksheet vào workbook
+        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      });
+      
+      // Xuất file - sử dụng tên file gốc hoặc tên tùy chỉnh
+      let exportFileName = fileName || 'bao-cao.xlsx';
+      // Nếu fileName có đuôi .xlsx thì giữ nguyên, nếu không thì thêm .xlsx
+      if (!exportFileName.endsWith('.xlsx') && !exportFileName.endsWith('.xls')) {
+        exportFileName = exportFileName + '.xlsx';
+      }
+      
+      // Gọi callback nếu có (trước khi xuất file)
+      if (onExport) {
+        onExport(workbook, exportFileName);
+      } else {
+        // Chỉ xuất file nếu không có callback
+        XLSX.writeFile(workbook, exportFileName);
+        alert('Xuất báo cáo thành công!');
+      }
+    } catch (err) {
+      console.error('Lỗi khi xuất file Excel:', err);
+      alert('Lỗi khi xuất file Excel: ' + err.message);
+    }
+  };
+
   return (
     <div className="w-full">
       {/* Header */}
@@ -323,20 +515,35 @@ const ExcelViewer = ({ filePath, fileName, defaultSheet = null }) => {
           </div>
         </div>
 
-        {/* Sheet selector */}
-        {data.sheetNames.length > 1 && (
-          <select
-            value={selectedSheet}
-            onChange={(e) => setSelectedSheet(e.target.value)}
-            className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        <div className="flex items-center gap-3">
+          {/* Sheet selector */}
+          {data.sheetNames.length > 1 && (
+            <select
+              value={selectedSheet}
+              onChange={(e) => {
+                setSelectedSheet(e.target.value);
+                setEditingCell(null); // Hủy edit khi chuyển sheet
+              }}
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {data.sheetNames.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          )}
+          
+          {/* Export button - chỉ để tải xuống */}
+          <button
+            onClick={handleExport}
+            className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium"
+            title="Tải file Excel xuống máy tính"
           >
-            {data.sheetNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-        )}
+            <FaDownload className="w-4 h-4" />
+            Tải xuống Excel
+          </button>
+        </div>
       </div>
 
       {/* Format Info */}
@@ -382,15 +589,36 @@ const ExcelViewer = ({ filePath, fileName, defaultSheet = null }) => {
                   const cellStyle = getCellStyle(rowIndex, cellIndex);
                   const mergeInfo = getMergeInfo(rowIndex, cellIndex);
                   
+                  const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.colIndex === cellIndex;
+                  
                   return (
                     <CellTag
                       key={cellIndex}
                       style={cellStyle}
-                      className="px-4 py-2 border border-gray-200 text-sm text-gray-700"
+                      className={`px-4 py-2 border border-gray-200 text-sm text-gray-700 ${
+                        isEditing ? 'bg-blue-50 ring-2 ring-blue-500' : ''
+                      } ${
+                        rowIndex !== 0 && !isMergedCell(rowIndex, cellIndex) ? 'cursor-pointer hover:bg-blue-50' : ''
+                      }`}
                       colSpan={mergeInfo ? mergeInfo.cols : 1}
                       rowSpan={mergeInfo ? mergeInfo.rows : 1}
+                      onClick={() => handleCellClick(rowIndex, cellIndex)}
+                      onDoubleClick={() => handleCellClick(rowIndex, cellIndex)}
                     >
-                      {cell || ''}
+                      {isEditing ? (
+                        <input
+                          ref={inputRef}
+                          type="text"
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={handleCellSave}
+                          onKeyDown={handleCellKeyDown}
+                          className="w-full px-2 py-1 border border-blue-500 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          style={{ minWidth: '100px' }}
+                        />
+                      ) : (
+                        <span>{cell || ''}</span>
+                      )}
                     </CellTag>
                   );
                 })}
@@ -407,7 +635,9 @@ const ExcelViewer = ({ filePath, fileName, defaultSheet = null }) => {
       </div>
     </div>
   );
-};
+});
+
+ExcelViewer.displayName = 'ExcelViewer';
 
 export default ExcelViewer;
 

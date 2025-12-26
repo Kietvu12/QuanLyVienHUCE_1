@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   BarChart,
   Bar,
@@ -9,40 +10,133 @@ import {
   LineChart,
   Line,
 } from 'recharts';
+import { useAuth } from '../../context/AuthContext';
+import { baoCaoAPI } from '../../services/api';
+import { FaSpinner } from 'react-icons/fa';
 import React from 'react';
-const reportTypeData = [
-  { type: 'Doanh thu', fullType: 'Báo cáo doanh thu', count: 45 },
-  { type: 'Đề tài', fullType: 'Báo cáo đề tài', count: 38 },
-  { type: 'Nhân sự', fullType: 'Báo cáo nhân sự', count: 32 },
-  { type: 'Tài sản', fullType: 'Báo cáo tài sản', count: 28 },
-  { type: 'Tài chính', fullType: 'Báo cáo tài chính', count: 13 },
-];
 
-const monthlyReportData = [
-  { month: 'T1', fullMonth: 'Tháng 1', count: 12 },
-  { month: 'T2', fullMonth: 'Tháng 2', count: 15 },
-  { month: 'T3', fullMonth: 'Tháng 3', count: 18 },
-  { month: 'T4', fullMonth: 'Tháng 4', count: 14 },
-  { month: 'T5', fullMonth: 'Tháng 5', count: 16 },
-  { month: 'T6', fullMonth: 'Tháng 6', count: 20 },
-  { month: 'T7', fullMonth: 'Tháng 7', count: 22 },
-  { month: 'T8', fullMonth: 'Tháng 8', count: 19 },
-  { month: 'T9', fullMonth: 'Tháng 9', count: 17 },
-  { month: 'T10', fullMonth: 'Tháng 10', count: 21 },
-  { month: 'T11', fullMonth: 'Tháng 11', count: 24 },
-  { month: 'T12', fullMonth: 'Tháng 12', count: 18 },
-];
+const monthNames = ['T1', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'T8', 'T9', 'T10', 'T11', 'T12'];
+const fullMonthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
 
-const statusData = [
-  { month: 'Tháng 1', completed: 10, processing: 2 },
-  { month: 'Tháng 2', completed: 13, processing: 2 },
-  { month: 'Tháng 3', completed: 16, processing: 2 },
-  { month: 'Tháng 4', completed: 12, processing: 2 },
-  { month: 'Tháng 5', completed: 14, processing: 2 },
-  { month: 'Tháng 6', completed: 18, processing: 2 },
-];
+const getReportType = (tieu_de) => {
+  if (!tieu_de) return 'Khác';
+  const title = tieu_de.toLowerCase();
+  if (title.includes('doanh thu') || title.includes('thu')) return 'Doanh thu';
+  if (title.includes('đề tài') || title.includes('nghiên cứu')) return 'Đề tài';
+  if (title.includes('nhân sự') || title.includes('nhân viên')) return 'Nhân sự';
+  if (title.includes('tài sản')) return 'Tài sản';
+  if (title.includes('tài chính') || title.includes('bctc')) return 'Tài chính';
+  return 'Khác';
+};
 
 const ReportSession2 = () => {
+  const { user } = useAuth();
+  const [reportTypeData, setReportTypeData] = useState([]);
+  const [monthlyReportData, setMonthlyReportData] = useState([]);
+  const [statusData, setStatusData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [totalReports, setTotalReports] = useState(0);
+
+  useEffect(() => {
+    const fetchChartData = async () => {
+      if (!user?.id) return;
+      
+      setLoading(true);
+      try {
+        // Lấy tất cả báo cáo
+        const params = {
+          id_vien: user.id_vien || undefined,
+          id_nguoi_tao: user.id,
+          limit: 1000,
+        };
+
+        const response = await baoCaoAPI.getAll(params);
+        
+        if (response.success) {
+          const reports = response.data || [];
+          setTotalReports(reports.length);
+
+          // 1. Phân bố theo loại báo cáo
+          const typeCount = {};
+          reports.forEach(report => {
+            const type = getReportType(report.tieu_de);
+            typeCount[type] = (typeCount[type] || 0) + 1;
+          });
+
+          const typeData = [
+            { type: 'Doanh thu', fullType: 'Báo cáo doanh thu', count: typeCount['Doanh thu'] || 0 },
+            { type: 'Đề tài', fullType: 'Báo cáo đề tài', count: typeCount['Đề tài'] || 0 },
+            { type: 'Nhân sự', fullType: 'Báo cáo nhân sự', count: typeCount['Nhân sự'] || 0 },
+            { type: 'Tài sản', fullType: 'Báo cáo tài sản', count: typeCount['Tài sản'] || 0 },
+            { type: 'Tài chính', fullType: 'Báo cáo tài chính', count: typeCount['Tài chính'] || 0 },
+          ].filter(item => item.count > 0);
+          setReportTypeData(typeData);
+
+          // 2. Số lượng báo cáo theo tháng (12 tháng gần nhất)
+          const currentYear = new Date().getFullYear();
+          const monthlyCount = {};
+          
+          reports.forEach(report => {
+            const date = new Date(report.ngay_tao);
+            if (date.getFullYear() === currentYear) {
+              const month = date.getMonth(); // 0-11
+              monthlyCount[month] = (monthlyCount[month] || 0) + 1;
+            }
+          });
+
+          const monthlyData = monthNames.map((month, index) => ({
+            month,
+            fullMonth: fullMonthNames[index],
+            count: monthlyCount[index] || 0,
+          }));
+          setMonthlyReportData(monthlyData);
+
+          // 3. Trạng thái báo cáo theo tháng (6 tháng gần nhất)
+          const last6Months = [];
+          const now = new Date();
+          for (let i = 5; i >= 0; i--) {
+            const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+            last6Months.push({
+              monthIndex: date.getMonth(),
+              year: date.getFullYear(),
+              monthName: fullMonthNames[date.getMonth()],
+            });
+          }
+
+          const statusMonthlyData = last6Months.map(({ monthIndex, year, monthName }) => {
+            const monthReports = reports.filter(report => {
+              const reportDate = new Date(report.ngay_tao);
+              return reportDate.getMonth() === monthIndex && reportDate.getFullYear() === year;
+            });
+
+            return {
+              month: monthName,
+              completed: monthReports.filter(r => r.trang_thai === 'da_phe_duyet').length,
+              processing: monthReports.filter(r => r.trang_thai === 'cho_phe_duyet').length,
+            };
+          });
+          setStatusData(statusMonthlyData);
+        }
+      } catch (error) {
+        console.error('Lỗi khi lấy dữ liệu biểu đồ:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchChartData();
+  }, [user]);
+  if (loading) {
+    return (
+      <section className="px-6">
+        <div className="flex items-center justify-center p-8">
+          <FaSpinner className="w-6 h-6 text-blue-500 animate-spin mr-2" />
+          <span className="text-gray-600">Đang tải dữ liệu biểu đồ...</span>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className="px-6">
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -53,12 +147,17 @@ const ReportSession2 = () => {
               Phân bố theo loại báo cáo
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              Tổng số báo cáo: 156
+              Tổng số báo cáo: {totalReports}
             </p>
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
+            {reportTypeData.length === 0 ? (
+              <div className="text-center text-gray-500 text-sm">
+                Chưa có dữ liệu
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={reportTypeData}
                 layout="vertical"
@@ -107,6 +206,7 @@ const ReportSession2 = () => {
                 />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -122,7 +222,12 @@ const ReportSession2 = () => {
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
+            {monthlyReportData.length === 0 ? (
+              <div className="text-center text-gray-500 text-sm">
+                Chưa có dữ liệu
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
               <LineChart 
                 data={monthlyReportData} 
                 margin={{ top: 20, right: 20, bottom: 10, left: 20 }}
@@ -171,6 +276,7 @@ const ReportSession2 = () => {
                 />
               </LineChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -186,7 +292,12 @@ const ReportSession2 = () => {
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
+            {statusData.length === 0 ? (
+              <div className="text-center text-gray-500 text-sm">
+                Chưa có dữ liệu
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
               <BarChart 
                 data={statusData} 
                 margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
@@ -227,6 +338,7 @@ const ReportSession2 = () => {
                 />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           <div className="mt-4 flex items-center gap-6 text-xs">

@@ -29,6 +29,12 @@ const getAllHopDongLaoDong = async (req, res) => {
               attributes: ['id', 'ten_vien']
             }]
           }]
+        },
+        {
+          model: db.LoaiHopDong,
+          as: 'loaiHopDong',
+          attributes: ['id', 'ten_loai', 'mo_ta'],
+          required: false
         }
       ],
       limit: parseInt(limit),
@@ -77,6 +83,12 @@ const getHopDongLaoDongById = async (req, res) => {
               attributes: ['id', 'ten_vien']
             }]
           }]
+        },
+        {
+          model: db.LoaiHopDong,
+          as: 'loaiHopDong',
+          attributes: ['id', 'ten_loai', 'mo_ta'],
+          required: false
         }
       ]
     });
@@ -107,6 +119,7 @@ const createHopDongLaoDong = async (req, res) => {
   try {
     const {
       id_nhan_su,
+      id_loai_hop_dong,
       ma_hop_dong,
       ngay_tao_hop_dong_lao_dong,
       luong_theo_hop_dong,
@@ -138,6 +151,7 @@ const createHopDongLaoDong = async (req, res) => {
 
     const hopDong = await db.HopDongLaoDong.create({
       id_nhan_su,
+      id_loai_hop_dong: id_loai_hop_dong || null,
       ma_hop_dong,
       ngay_tao_hop_dong_lao_dong,
       luong_theo_hop_dong,
@@ -146,11 +160,19 @@ const createHopDongLaoDong = async (req, res) => {
     });
 
     const hopDongWithNhanSu = await db.HopDongLaoDong.findByPk(hopDong.id, {
-      include: [{
-        model: db.NhanSu,
-        as: 'nhanSu',
-        attributes: ['id', 'ho_ten', 'cccd']
-      }]
+      include: [
+        {
+          model: db.NhanSu,
+          as: 'nhanSu',
+          attributes: ['id', 'ho_ten', 'cccd']
+        },
+        {
+          model: db.LoaiHopDong,
+          as: 'loaiHopDong',
+          attributes: ['id', 'ten_loai', 'mo_ta'],
+          required: false
+        }
+      ]
     });
 
     res.status(201).json({
@@ -174,6 +196,7 @@ const updateHopDongLaoDong = async (req, res) => {
     const { id } = req.params;
     const {
       id_nhan_su,
+      id_loai_hop_dong,
       ma_hop_dong,
       ngay_tao_hop_dong_lao_dong,
       luong_theo_hop_dong,
@@ -216,6 +239,7 @@ const updateHopDongLaoDong = async (req, res) => {
 
     await hopDong.update({
       id_nhan_su: id_nhan_su !== undefined ? id_nhan_su : hopDong.id_nhan_su,
+      id_loai_hop_dong: id_loai_hop_dong !== undefined ? (id_loai_hop_dong || null) : hopDong.id_loai_hop_dong,
       ma_hop_dong: ma_hop_dong !== undefined ? ma_hop_dong : hopDong.ma_hop_dong,
       ngay_tao_hop_dong_lao_dong: ngay_tao_hop_dong_lao_dong !== undefined ? ngay_tao_hop_dong_lao_dong : hopDong.ngay_tao_hop_dong_lao_dong,
       luong_theo_hop_dong: luong_theo_hop_dong !== undefined ? luong_theo_hop_dong : hopDong.luong_theo_hop_dong,
@@ -224,11 +248,19 @@ const updateHopDongLaoDong = async (req, res) => {
     });
 
     const updatedHopDong = await db.HopDongLaoDong.findByPk(id, {
-      include: [{
-        model: db.NhanSu,
-        as: 'nhanSu',
-        attributes: ['id', 'ho_ten', 'cccd']
-      }]
+      include: [
+        {
+          model: db.NhanSu,
+          as: 'nhanSu',
+          attributes: ['id', 'ho_ten', 'cccd']
+        },
+        {
+          model: db.LoaiHopDong,
+          as: 'loaiHopDong',
+          attributes: ['id', 'ten_loai', 'mo_ta'],
+          required: false
+        }
+      ]
     });
 
     res.json({

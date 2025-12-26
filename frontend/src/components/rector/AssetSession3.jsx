@@ -1,81 +1,8 @@
-import { useState } from 'react';
-import { FaSearch, FaPlus, FaEdit, FaTrash, FaEye, FaTools, FaTimes, FaUpload, FaFileUpload, FaTrashAlt, FaCheckCircle, FaExchangeAlt } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaSearch, FaPlus, FaEdit, FaTrash, FaEye, FaTools, FaTimes, FaUpload, FaFileUpload, FaTrashAlt, FaCheckCircle, FaExchangeAlt, FaBuilding } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
+import { phongCuaVienAPI, phongBanAPI, taiSanAPI } from '../../services/api';
 import React from 'react';
-const assets = [
-  {
-    id: 'TS-2025-001',
-    name: 'Laptop Dell XPS 15',
-    category: 'Máy tính',
-    purchaseDate: '15/03/2023',
-    purchasePrice: '25.000.000',
-    status: 'Đang sử dụng',
-    location: 'Phòng 201',
-  },
-  {
-    id: 'TS-2025-002',
-    name: 'Máy in HP LaserJet',
-    category: 'Thiết bị',
-    purchaseDate: '20/05/2022',
-    purchasePrice: '8.500.000',
-    status: 'Cần bảo trì',
-    location: 'Phòng 105',
-  },
-  {
-    id: 'TS-2025-003',
-    name: 'Bàn làm việc gỗ',
-    category: 'Nội thất',
-    purchaseDate: '10/01/2021',
-    purchasePrice: '3.200.000',
-    status: 'Đang sử dụng',
-    location: 'Phòng 302',
-  },
-  {
-    id: 'TS-2025-004',
-    name: 'Máy tính để bàn',
-    category: 'Máy tính',
-    purchaseDate: '05/09/2022',
-    purchasePrice: '18.000.000',
-    status: 'Đang sử dụng',
-    location: 'Phòng 205',
-  },
-  {
-    id: 'TS-2025-005',
-    name: 'Xe máy Honda',
-    category: 'Phương tiện',
-    purchaseDate: '12/11/2020',
-    purchasePrice: '35.000.000',
-    status: 'Đang sử dụng',
-    location: 'Bãi xe',
-  },
-  {
-    id: 'TS-2025-006',
-    name: 'Máy chiếu Epson',
-    category: 'Thiết bị',
-    purchaseDate: '15/04/2021',
-    purchasePrice: '12.000.000',
-    status: 'Hỏng',
-    location: 'Phòng họp',
-  },
-  {
-    id: 'TS-2025-007',
-    name: 'Ghế văn phòng',
-    category: 'Nội thất',
-    purchaseDate: '20/06/2023',
-    purchasePrice: '2.500.000',
-    status: 'Đang sử dụng',
-    location: 'Phòng 301',
-  },
-  {
-    id: 'TS-2025-008',
-    name: 'Máy tính bảng iPad',
-    category: 'Máy tính',
-    purchaseDate: '08/08/2023',
-    purchasePrice: '15.000.000',
-    status: 'Có sẵn',
-    location: 'Kho',
-  },
-];
 
 const getStatusColor = (status) => {
   switch (status) {
@@ -95,6 +22,13 @@ const getStatusColor = (status) => {
 const AssetSession3 = () => {
   const { user } = useAuth();
   const isReadOnly = user?.role === 'accountant';
+  
+  // Tab state
+  const [activeTab, setActiveTab] = useState('assets'); // 'assets' or 'rooms'
+  
+  // Asset states
+  const [assets, setAssets] = useState([]);
+  const [loadingAssets, setLoadingAssets] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [assetsForm, setAssetsForm] = useState([
     {
@@ -104,13 +38,45 @@ const AssetSession3 = () => {
       purchaseDate: '',
       purchasePrice: '',
       status: 'Đang sử dụng',
+      id_phong: '',
+      anh_phieu_nhan: null,
+      anh_tai_san: null,
     },
   ]);
+  const [availableRooms, setAvailableRooms] = useState([]);
   const [transferDocument, setTransferDocument] = useState(null);
   const [selectedAssets, setSelectedAssets] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferFiles, setTransferFiles] = useState([]);
+  const [searchAssetTerm, setSearchAssetTerm] = useState('');
+  const [selectedAssetCategory, setSelectedAssetCategory] = useState('');
+  const [selectedAssetStatus, setSelectedAssetStatus] = useState('');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  })
+  
+  // Room states
+  const [rooms, setRooms] = useState([]);
+  const [phongBans, setPhongBans] = useState([]);
+  const [loadingRooms, setLoadingRooms] = useState(false);
+  const [showRoomModal, setShowRoomModal] = useState(false);
+  const [editingRoom, setEditingRoom] = useState(null);
+  const [roomFormData, setRoomFormData] = useState({
+    id_phong_ban: '',
+    ten_toa: '',
+    so_tang: '',
+    so_phong: '',
+    dien_tich: '',
+    trang_thai: 'trong',
+  });
+  const [showDeleteRoomConfirm, setShowDeleteRoomConfirm] = useState(false);
+  const [roomToDelete, setRoomToDelete] = useState(null);
+  const [searchRoomTerm, setSearchRoomTerm] = useState('');
+  const [selectedRoomStatus, setSelectedRoomStatus] = useState('');
 
   const handleAddAssetRow = () => {
     setAssetsForm([
@@ -122,6 +88,9 @@ const AssetSession3 = () => {
         purchaseDate: '',
         purchasePrice: '',
         status: 'Đang sử dụng',
+        id_phong: '',
+        anh_phieu_nhan: null,
+        anh_tai_san: null,
       },
     ]);
   };
@@ -149,40 +118,115 @@ const AssetSession3 = () => {
     setTransferDocument(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleAssetImageChange = (index, field, file) => {
+    const updated = [...assetsForm];
+    updated[index][field] = file;
+    setAssetsForm(updated);
+  };
+
+  const handleRemoveAssetImage = (index, field) => {
+    const updated = [...assetsForm];
+    updated[index][field] = null;
+    setAssetsForm(updated);
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Aquí se procesaría el envío del formulario
-    console.log('Assets:', assetsForm);
-    console.log('Transfer Document:', transferDocument);
-    // Cerrar modal y resetear formulario
-    setIsModalOpen(false);
-    setAssetsForm([
-      {
-        name: '',
-        category: '',
-        location: '',
-        purchaseDate: '',
-        purchasePrice: '',
-        status: 'Đang sử dụng',
-      },
-    ]);
-    setTransferDocument(null);
+    try {
+      // Tạo từng tài sản
+      for (const asset of assetsForm) {
+        const assetData = {
+          id_vien: user?.id_vien,
+          id_phong: asset.id_phong || null,
+          ten_tai_san: asset.name,
+          tinh_trang: asset.status === 'Đang sử dụng' ? 'tot' : 
+                     asset.status === 'Cần bảo trì' ? 'can_bao_tri' : 
+                     asset.status === 'Hỏng' ? 'hong' : 'tot',
+          ngay_nhan_tai_san: asset.purchaseDate || null,
+        };
+
+        const response = await taiSanAPI.create(assetData);
+        const taiSanId = response.data?.id;
+
+        // Upload media nếu có
+        if (taiSanId && (asset.anh_phieu_nhan || asset.anh_tai_san)) {
+          const formData = new FormData();
+          if (asset.anh_phieu_nhan) {
+            formData.append('anh_phieu_nhan', asset.anh_phieu_nhan);
+          }
+          if (asset.anh_tai_san) {
+            formData.append('anh_tai_san', asset.anh_tai_san);
+          }
+          await taiSanAPI.uploadMedia(taiSanId, formData);
+        }
+      }
+
+      // TODO: Upload transfer document nếu có
+      if (transferDocument) {
+        // Xử lý upload file
+      }
+
+      alert('Thêm tài sản thành công!');
+      setIsModalOpen(false);
+      setAssetsForm([
+        {
+          name: '',
+          category: '',
+          location: '',
+          purchaseDate: '',
+          purchasePrice: '',
+          status: 'Đang sử dụng',
+          id_phong: '',
+          anh_phieu_nhan: null,
+          anh_tai_san: null,
+        },
+      ]);
+      setTransferDocument(null);
+      fetchAssets(); // Refresh danh sách tài sản
+    } catch (error) {
+      console.error('Lỗi khi thêm tài sản:', error);
+      alert('Có lỗi xảy ra khi thêm tài sản');
+    }
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
-    setAssetsForm([
-      {
-        name: '',
-        category: '',
-        location: '',
-        purchaseDate: '',
-        purchasePrice: '',
-        status: 'Đang sử dụng',
-      },
-    ]);
-    setTransferDocument(null);
+      setAssetsForm([
+        {
+          name: '',
+          category: '',
+          location: '',
+          purchaseDate: '',
+          purchasePrice: '',
+          status: 'Đang sử dụng',
+          id_phong: '',
+          anh_phieu_nhan: null,
+          anh_tai_san: null,
+        },
+      ]);
+      setTransferDocument(null);
   };
+
+  // Fetch rooms when opening asset modal
+  useEffect(() => {
+    if (isModalOpen && user?.id_vien) {
+      const fetchRoomsForAsset = async () => {
+        try {
+          const response = await phongCuaVienAPI.getAll({
+            id_vien: user?.id_vien,
+            page: 1,
+            limit: 1000,
+          });
+          if (response.success) {
+            setAvailableRooms(response.data || []);
+          }
+        } catch (error) {
+          console.error('Lỗi khi lấy danh sách phòng:', error);
+        }
+      };
+      fetchRoomsForAsset();
+    }
+  }, [isModalOpen, user?.id_vien]);
 
   const handleSelectAsset = (assetId) => {
     setSelectedAssets((prev) => {
@@ -206,12 +250,19 @@ const AssetSession3 = () => {
     setShowDeleteConfirm(true);
   };
 
-  const confirmDelete = () => {
-    // Xử lý xóa tài sản đã chọn
-    console.log('Deleting assets:', selectedAssets);
-    setSelectedAssets([]);
-    setShowDeleteConfirm(false);
-    // TODO: Gọi API để xóa tài sản
+  const confirmDelete = async () => {
+    try {
+      for (const assetId of selectedAssets) {
+        await taiSanAPI.delete(assetId);
+      }
+      setSelectedAssets([]);
+      setShowDeleteConfirm(false);
+      fetchAssets(); // Refresh danh sách tài sản
+      alert('Xóa tài sản thành công!');
+    } catch (error) {
+      console.error('Lỗi khi xóa tài sản:', error);
+      alert('Có lỗi xảy ra khi xóa tài sản');
+    }
   };
 
   const handleTransferSelected = () => {
@@ -237,55 +288,346 @@ const AssetSession3 = () => {
     // TODO: Gọi API để bàn giao lại
   };
 
+  // Room management functions
+  useEffect(() => {
+    if (activeTab === 'rooms' && user?.id_vien) {
+      fetchRooms();
+      fetchPhongBans();
+    }
+  }, [activeTab, user?.id_vien]);
+
+  const fetchRooms = async () => {
+    try {
+      setLoadingRooms(true);
+      const params = {
+        id_vien: user?.id_vien,
+        page: 1,
+        limit: 1000,
+      };
+      if (selectedRoomStatus) {
+        params.trang_thai = selectedRoomStatus;
+      }
+      const response = await phongCuaVienAPI.getAll(params);
+      if (response.success) {
+        let filteredRooms = response.data || [];
+        if (searchRoomTerm) {
+          filteredRooms = filteredRooms.filter(room => 
+            room.so_phong?.toLowerCase().includes(searchRoomTerm.toLowerCase()) ||
+            room.ten_toa?.toLowerCase().includes(searchRoomTerm.toLowerCase()) ||
+            room.phongBan?.ten_phong_ban?.toLowerCase().includes(searchRoomTerm.toLowerCase())
+          );
+        }
+        setRooms(filteredRooms);
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy danh sách phòng:', error);
+    } finally {
+      setLoadingRooms(false);
+    }
+  };
+
+  const fetchPhongBans = async () => {
+    try {
+      const response = await phongBanAPI.getAll({ id_vien: user?.id_vien });
+      if (response.success) {
+        setPhongBans(response.data || []);
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy danh sách phòng ban:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'rooms') {
+      fetchRooms();
+    }
+  }, [searchRoomTerm, selectedRoomStatus]);
+
+  const handleOpenRoomModal = (room = null) => {
+    if (room) {
+      setEditingRoom(room);
+      setRoomFormData({
+        id_phong_ban: room.id_phong_ban || '',
+        ten_toa: room.ten_toa || '',
+        so_tang: room.so_tang || '',
+        so_phong: room.so_phong || '',
+        dien_tich: room.dien_tich || '',
+        trang_thai: room.trang_thai || 'trong',
+      });
+    } else {
+      setEditingRoom(null);
+      setRoomFormData({
+        id_phong_ban: '',
+        ten_toa: '',
+        so_tang: '',
+        so_phong: '',
+        dien_tich: '',
+        trang_thai: 'trong',
+      });
+    }
+    setShowRoomModal(true);
+  };
+
+  const handleCloseRoomModal = () => {
+    setShowRoomModal(false);
+    setEditingRoom(null);
+    setRoomFormData({
+      id_phong_ban: '',
+      ten_toa: '',
+      so_tang: '',
+      so_phong: '',
+      dien_tich: '',
+      trang_thai: 'trong',
+    });
+  };
+
+  const handleRoomSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const data = {
+        id_vien: user?.id_vien,
+        id_phong_ban: roomFormData.id_phong_ban || null,
+        ten_toa: roomFormData.ten_toa || null,
+        so_tang: roomFormData.so_tang ? parseInt(roomFormData.so_tang) : null,
+        so_phong: roomFormData.so_phong || null,
+        dien_tich: roomFormData.dien_tich ? parseFloat(roomFormData.dien_tich) : null,
+        trang_thai: roomFormData.trang_thai,
+      };
+
+      if (editingRoom) {
+        await phongCuaVienAPI.update(editingRoom.id, data);
+      } else {
+        await phongCuaVienAPI.create(data);
+      }
+      
+      handleCloseRoomModal();
+      fetchRooms();
+    } catch (error) {
+      console.error('Lỗi khi lưu phòng:', error);
+      alert('Có lỗi xảy ra khi lưu phòng');
+    }
+  };
+
+  const handleDeleteRoom = (room) => {
+    setRoomToDelete(room);
+    setShowDeleteRoomConfirm(true);
+  };
+
+  const confirmDeleteRoom = async () => {
+    try {
+      await phongCuaVienAPI.delete(roomToDelete.id);
+      setShowDeleteRoomConfirm(false);
+      setRoomToDelete(null);
+      fetchRooms();
+    } catch (error) {
+      console.error('Lỗi khi xóa phòng:', error);
+      alert('Có lỗi xảy ra khi xóa phòng');
+    }
+  };
+
+  const getRoomStatusColor = (status) => {
+    switch (status) {
+      case 'trong':
+        return 'bg-blue-100 text-blue-800';
+      case 'dang_su_dung':
+        return 'bg-emerald-100 text-emerald-800';
+      case 'bao_tri':
+        return 'bg-yellow-100 text-yellow-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const getRoomStatusLabel = (status) => {
+    switch (status) {
+      case 'trong':
+        return 'Trống';
+      case 'dang_su_dung':
+        return 'Đang sử dụng';
+      case 'bao_tri':
+        return 'Bảo trì';
+      default:
+        return status;
+    }
+  };
+
+  // Asset management functions
+  useEffect(() => {
+    if (activeTab === 'assets' && user?.id_vien) {
+      fetchAssets();
+    }
+  }, [activeTab, user?.id_vien, pagination.page, searchAssetTerm, selectedAssetCategory, selectedAssetStatus]);
+
+  const fetchAssets = async () => {
+    try {
+      setLoadingAssets(true);
+      const params = {
+        id_vien: user?.id_vien,
+        page: pagination.page,
+        limit: pagination.limit,
+      };
+      if (selectedAssetStatus) {
+        // Map UI status to API status
+        const statusMap = {
+          'Đang sử dụng': 'tot',
+          'Cần bảo trì': 'can_bao_tri',
+          'Hỏng': 'hong',
+        };
+        params.tinh_trang = statusMap[selectedAssetStatus] || selectedAssetStatus;
+      }
+      const response = await taiSanAPI.getAll(params);
+      if (response.success) {
+        let filteredAssets = response.data || [];
+        
+        // Client-side filtering for category and search
+        if (selectedAssetCategory) {
+          // Note: Category filtering might need to be done on backend if category is stored
+          // For now, we'll skip category filtering as it's not in the model
+        }
+        if (searchAssetTerm) {
+          filteredAssets = filteredAssets.filter(asset =>
+            asset.ten_tai_san?.toLowerCase().includes(searchAssetTerm.toLowerCase()) ||
+            asset.phong?.so_phong?.toLowerCase().includes(searchAssetTerm.toLowerCase()) ||
+            asset.phong?.ten_toa?.toLowerCase().includes(searchAssetTerm.toLowerCase())
+          );
+        }
+        
+        setAssets(filteredAssets);
+        if (response.pagination) {
+          setPagination(prev => ({
+            ...prev,
+            total: response.pagination.total,
+            totalPages: response.pagination.totalPages,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy danh sách tài sản:', error);
+    } finally {
+      setLoadingAssets(false);
+    }
+  };
+
+  const getAssetStatusLabel = (tinh_trang) => {
+    switch (tinh_trang) {
+      case 'tot':
+        return 'Đang sử dụng';
+      case 'can_bao_tri':
+        return 'Cần bảo trì';
+      case 'hong':
+        return 'Hỏng';
+      default:
+        return tinh_trang;
+    }
+  };
+
+  const getAssetStatusColor = (tinh_trang) => {
+    switch (tinh_trang) {
+      case 'tot':
+        return 'bg-emerald-100 text-emerald-800';
+      case 'can_bao_tri':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'hong':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN');
+  };
+
   return (
     <section className="px-6">
       <div className="rounded-2xl bg-white shadow-sm px-6 py-5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-          <div>
-            <h3 className="text-lg font-bold text-gray-900">Danh sách tài sản</h3>
-            <p className="text-sm text-gray-500 mt-1">
-              Quản lý toàn bộ tài sản của Viện
-            </p>
-          </div>
-          {!isReadOnly && (
+        {/* Tabs */}
+        <div className="mb-6 border-b border-gray-200">
+          <div className="flex gap-4">
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors self-start sm:self-auto"
+              onClick={() => setActiveTab('assets')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'assets'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
             >
-              <FaPlus className="w-4 h-4" />
-              Thêm tài sản
+              Tài sản
             </button>
-          )}
+            <button
+              onClick={() => setActiveTab('rooms')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                activeTab === 'rooms'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <FaBuilding className="inline-block mr-2" />
+              Danh sách phòng
+            </button>
+          </div>
         </div>
 
-        {/* Búsqueda y filtros */}
-        <div className="mb-4 flex flex-wrap items-center gap-4">
-          <div className="flex-1 min-w-[200px]">
-            <div className="relative">
-              <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Tìm kiếm mã tài sản, tên, mô tả..."
-                className="w-full h-9 pl-10 pr-4 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+        {/* Assets Tab Content */}
+        {activeTab === 'assets' && (
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Danh sách tài sản</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Quản lý toàn bộ tài sản của Viện
+                </p>
+              </div>
+              {!isReadOnly && (
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors self-start sm:self-auto"
+                >
+                  <FaPlus className="w-4 h-4" />
+                  Thêm tài sản
+                </button>
+              )}
             </div>
-          </div>
-          <select className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-            <option value="">Tất cả loại</option>
-            <option value="computer">Máy tính</option>
-            <option value="furniture">Nội thất</option>
-            <option value="equipment">Thiết bị</option>
-            <option value="vehicle">Phương tiện</option>
-            <option value="other">Khác</option>
-          </select>
-          <select className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-            <option value="">Tất cả trạng thái</option>
-            <option value="using">Đang sử dụng</option>
-            <option value="maintenance">Cần bảo trì</option>
-            <option value="broken">Hỏng</option>
-            <option value="available">Có sẵn</option>
-          </select>
-        </div>
+
+            {/* Search and filters */}
+            <div className="mb-4 flex flex-wrap items-center gap-4">
+              <div className="flex-1 min-w-[200px]">
+                <div className="relative">
+                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm tên tài sản, số phòng..."
+                    value={searchAssetTerm}
+                    onChange={(e) => setSearchAssetTerm(e.target.value)}
+                    className="w-full h-9 pl-10 pr-4 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <select
+                value={selectedAssetCategory}
+                onChange={(e) => setSelectedAssetCategory(e.target.value)}
+                className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Tất cả loại</option>
+                <option value="computer">Máy tính</option>
+                <option value="furniture">Nội thất</option>
+                <option value="equipment">Thiết bị</option>
+                <option value="vehicle">Phương tiện</option>
+                <option value="other">Khác</option>
+              </select>
+              <select
+                value={selectedAssetStatus}
+                onChange={(e) => setSelectedAssetStatus(e.target.value)}
+                className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value="Đang sử dụng">Đang sử dụng</option>
+                <option value="Cần bảo trì">Cần bảo trì</option>
+                <option value="Hỏng">Hỏng</option>
+              </select>
+            </div>
 
         {/* Action buttons khi có item được chọn */}
         {!isReadOnly && selectedAssets.length > 0 && (
@@ -313,202 +655,440 @@ const AssetSession3 = () => {
         )}
 
         {/* Desktop Table */}
-        <div className="overflow-x-auto hidden 2xl:block">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-200">
-                {!isReadOnly && (
-                  <th className="text-center py-3 px-4 w-12">
-                    <input
-                      type="checkbox"
-                      checked={selectedAssets.length === assets.length && assets.length > 0}
-                      onChange={handleSelectAll}
-                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                  </th>
-                )}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Mã TS
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Tên tài sản
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Loại
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Vị trí
-                </th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Ngày mua
-                </th>
-                <th className="text-right py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Giá trị
-                </th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Trạng thái
-                </th>
-                <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                  Thao tác
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {assets.map((asset) => (
-                <tr key={asset.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+        {loadingAssets ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500">Đang tải...</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto hidden 2xl:block">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-gray-200">
                   {!isReadOnly && (
-                    <td className="py-4 px-4 text-center">
+                    <th className="text-center py-3 px-4 w-12">
                       <input
                         type="checkbox"
-                        checked={selectedAssets.includes(asset.id)}
-                        onChange={() => handleSelectAsset(asset.id)}
+                        checked={selectedAssets.length === assets.length && assets.length > 0}
+                        onChange={handleSelectAll}
                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
-                    </td>
+                    </th>
                   )}
-                  <td className="py-4 px-4">
-                    <span className="text-sm font-medium text-blue-600">{asset.id}</span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className="text-sm font-medium text-gray-900">{asset.name}</span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      {asset.category}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className="text-sm text-gray-700">{asset.location}</span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <span className="text-sm text-gray-700">{asset.purchaseDate}</span>
-                  </td>
-                  <td className="py-4 px-4 text-right">
-                    <span className="text-sm font-semibold text-gray-900">
-                      {asset.purchasePrice} đ
-                    </span>
-                  </td>
-                  <td className="py-4 px-4 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(asset.status)}`}>
-                      {asset.status}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">
-                    <div className="flex items-center justify-center gap-2">
-                      <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Xem chi tiết">
-                        <FaEye className="w-4 h-4" />
-                      </button>
-                      {!isReadOnly && (
-                        <>
-                          <button className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded transition-colors" title="Bảo trì">
-                            <FaTools className="w-4 h-4" />
-                          </button>
-                          <button className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors" title="Chỉnh sửa">
-                            <FaEdit className="w-4 h-4" />
-                          </button>
-                          <button className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors" title="Xóa">
-                            <FaTrash className="w-4 h-4" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    ID
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Tên tài sản
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Phòng
+                  </th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Ngày nhận
+                  </th>
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Trạng thái
+                  </th>
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Thao tác
+                  </th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {assets.length === 0 ? (
+                  <tr>
+                    <td colSpan={isReadOnly ? 6 : 7} className="text-center py-8 text-gray-500">
+                      Không có dữ liệu
+                    </td>
+                  </tr>
+                ) : (
+                  assets.map((asset) => (
+                    <tr key={asset.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      {!isReadOnly && (
+                        <td className="py-4 px-4 text-center">
+                          <input
+                            type="checkbox"
+                            checked={selectedAssets.includes(asset.id)}
+                            onChange={() => handleSelectAsset(asset.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          />
+                        </td>
+                      )}
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-blue-600">TS-{asset.id}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm font-medium text-gray-900">{asset.ten_tai_san}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-700">
+                          {asset.phong ? `${asset.phong.so_phong || ''} ${asset.phong.ten_toa ? `- ${asset.phong.ten_toa}` : ''}` : '-'}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-700">{formatDate(asset.ngay_nhan_tai_san)}</span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getAssetStatusColor(asset.tinh_trang)}`}>
+                          {getAssetStatusLabel(asset.tinh_trang)}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Xem chi tiết">
+                            <FaEye className="w-4 h-4" />
+                          </button>
+                          {!isReadOnly && (
+                            <>
+                              <button className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded transition-colors" title="Bảo trì">
+                                <FaTools className="w-4 h-4" />
+                              </button>
+                              <button className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors" title="Chỉnh sửa">
+                                <FaEdit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedAssets([asset.id]);
+                                  handleDeleteSelected();
+                                }}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                title="Xóa"
+                              >
+                                <FaTrash className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
 
         {/* Mobile/Tablet Cards */}
-        <div className="2xl:hidden space-y-4">
-          {assets.map((asset) => (
-            <div key={asset.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    {!isReadOnly && (
-                      <input
-                        type="checkbox"
-                        checked={selectedAssets.includes(asset.id)}
-                        onChange={() => handleSelectAsset(asset.id)}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
-                      />
-                    )}
-                    <span className="text-sm font-semibold text-blue-600">{asset.id}</span>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                      {asset.category}
-                    </span>
+        {loadingAssets ? (
+          <div className="text-center py-8">
+            <p className="text-gray-500">Đang tải...</p>
+          </div>
+        ) : (
+          <div className="2xl:hidden space-y-4">
+            {assets.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                Không có dữ liệu
+              </div>
+            ) : (
+              assets.map((asset) => (
+                <div key={asset.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        {!isReadOnly && (
+                          <input
+                            type="checkbox"
+                            checked={selectedAssets.includes(asset.id)}
+                            onChange={() => handleSelectAsset(asset.id)}
+                            className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 flex-shrink-0"
+                          />
+                        )}
+                        <span className="text-sm font-semibold text-blue-600">TS-{asset.id}</span>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getAssetStatusColor(asset.tinh_trang)}`}>
+                          {getAssetStatusLabel(asset.tinh_trang)}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-semibold text-gray-900 mb-2">{asset.ten_tai_san}</h4>
+                    </div>
                   </div>
-                  <h4 className="text-sm font-semibold text-gray-900 mb-2">{asset.name}</h4>
-                </div>
-              </div>
-              
-              <div className="space-y-2 mb-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-600">Vị trí:</span>
-                  <span className="text-xs text-gray-900 font-medium">{asset.location}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-600">Ngày mua:</span>
-                  <span className="text-xs text-gray-900 font-medium">{asset.purchaseDate}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-600">Giá trị:</span>
-                  <span className="text-sm font-semibold text-gray-900">{asset.purchasePrice} đ</span>
-                </div>
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <span className="text-xs text-gray-600">Trạng thái:</span>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(asset.status)}`}>
-                    {asset.status}
-                  </span>
-                </div>
-              </div>
+                  
+                  <div className="space-y-2 mb-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">Phòng:</span>
+                      <span className="text-xs text-gray-900 font-medium">
+                        {asset.phong ? `${asset.phong.so_phong || ''} ${asset.phong.ten_toa ? `- ${asset.phong.ten_toa}` : ''}` : '-'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">Ngày nhận:</span>
+                      <span className="text-xs text-gray-900 font-medium">{formatDate(asset.ngay_nhan_tai_san)}</span>
+                    </div>
+                  </div>
 
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
-                <button className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Xem chi tiết">
-                  <FaEye className="w-4 h-4" />
-                </button>
-                {!isReadOnly && (
-                  <>
-                    <button className="p-2 text-yellow-600 hover:bg-yellow-50 rounded transition-colors" title="Bảo trì">
-                      <FaTools className="w-4 h-4" />
+                  <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                    <button className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Xem chi tiết">
+                      <FaEye className="w-4 h-4" />
                     </button>
-                    <button className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors" title="Chỉnh sửa">
-                      <FaEdit className="w-4 h-4" />
-                    </button>
-                    <button className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors" title="Xóa">
-                      <FaTrash className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+                    {!isReadOnly && (
+                      <>
+                        <button className="p-2 text-yellow-600 hover:bg-yellow-50 rounded transition-colors" title="Bảo trì">
+                          <FaTools className="w-4 h-4" />
+                        </button>
+                        <button className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors" title="Chỉnh sửa">
+                          <FaEdit className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSelectedAssets([asset.id]);
+                            handleDeleteSelected();
+                          }}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          title="Xóa"
+                        >
+                          <FaTrash className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
         {/* Pagination */}
-        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-sm text-gray-600">
-            Hiển thị 1-8 của 458 kết quả
-          </p>
-          <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              Trước
-            </button>
-            <button className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-sm font-medium">
-              1
-            </button>
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              2
-            </button>
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              3
-            </button>
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-              Sau
-            </button>
+        {!loadingAssets && (
+          <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <p className="text-sm text-gray-600">
+              Hiển thị {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} của {pagination.total} kết quả
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                disabled={pagination.page === 1}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Trước
+              </button>
+              {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+                const pageNum = i + 1;
+                return (
+                  <button
+                    key={pageNum}
+                    onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
+                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                      pagination.page === pageNum
+                        ? 'bg-blue-500 text-white'
+                        : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    {pageNum}
+                  </button>
+                );
+              })}
+              <button
+                onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                disabled={pagination.page >= pagination.totalPages}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Sau
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+          </>
+        )}
+
+        {/* Rooms Tab Content */}
+        {activeTab === 'rooms' && (
+          <>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Danh sách phòng</h3>
+                <p className="text-sm text-gray-500 mt-1">
+                  Quản lý toàn bộ phòng của Viện
+                </p>
+              </div>
+              {!isReadOnly && (
+                <button
+                  onClick={() => handleOpenRoomModal()}
+                  className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors self-start sm:self-auto"
+                >
+                  <FaPlus className="w-4 h-4" />
+                  Thêm phòng
+                </button>
+              )}
+            </div>
+
+            {/* Search and filters */}
+            <div className="mb-4 flex flex-wrap items-center gap-4">
+              <div className="flex-1 min-w-[200px]">
+                <div className="relative">
+                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input
+                    type="text"
+                    placeholder="Tìm kiếm số phòng, tên tòa, phòng ban..."
+                    value={searchRoomTerm}
+                    onChange={(e) => setSearchRoomTerm(e.target.value)}
+                    className="w-full h-9 pl-10 pr-4 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              <select
+                value={selectedRoomStatus}
+                onChange={(e) => setSelectedRoomStatus(e.target.value)}
+                className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value="trong">Trống</option>
+                <option value="dang_su_dung">Đang sử dụng</option>
+                <option value="bao_tri">Bảo trì</option>
+              </select>
+            </div>
+
+            {/* Rooms Table - Desktop */}
+            {loadingRooms ? (
+              <div className="text-center py-8">
+                <p className="text-gray-500">Đang tải...</p>
+              </div>
+            ) : (
+              <>
+                <div className="overflow-x-auto hidden 2xl:block">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200">
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          Số phòng
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          Tên tòa
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          Tầng
+                        </th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          Phòng ban
+                        </th>
+                        <th className="text-right py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          Diện tích (m²)
+                        </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          Trạng thái
+                        </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          Thao tác
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rooms.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="text-center py-8 text-gray-500">
+                            Không có dữ liệu
+                          </td>
+                        </tr>
+                      ) : (
+                        rooms.map((room) => (
+                          <tr key={room.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                            <td className="py-4 px-4">
+                              <span className="text-sm font-medium text-blue-600">{room.so_phong || '-'}</span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="text-sm text-gray-900">{room.ten_toa || '-'}</span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="text-sm text-gray-700">{room.so_tang || '-'}</span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="text-sm text-gray-700">{room.phongBan?.ten_phong_ban || '-'}</span>
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <span className="text-sm text-gray-700">{room.dien_tich ? `${room.dien_tich}` : '-'}</span>
+                            </td>
+                            <td className="py-4 px-4 text-center">
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoomStatusColor(room.trang_thai)}`}>
+                                {getRoomStatusLabel(room.trang_thai)}
+                              </span>
+                            </td>
+                            <td className="py-4 px-4">
+                              <div className="flex items-center justify-center gap-2">
+                                <button
+                                  onClick={() => handleOpenRoomModal(room)}
+                                  className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                  title="Chỉnh sửa"
+                                >
+                                  <FaEdit className="w-4 h-4" />
+                                </button>
+                                {!isReadOnly && (
+                                  <button
+                                    onClick={() => handleDeleteRoom(room)}
+                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                    title="Xóa"
+                                  >
+                                    <FaTrash className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Rooms Cards - Mobile/Tablet */}
+                <div className="2xl:hidden space-y-4">
+                  {rooms.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      Không có dữ liệu
+                    </div>
+                  ) : (
+                    rooms.map((room) => (
+                      <div key={room.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-sm font-semibold text-blue-600">{room.so_phong || '-'}</span>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoomStatusColor(room.trang_thai)}`}>
+                                {getRoomStatusLabel(room.trang_thai)}
+                              </span>
+                            </div>
+                            <h4 className="text-sm font-semibold text-gray-900 mb-2">{room.ten_toa || 'Chưa có tên tòa'}</h4>
+                          </div>
+                        </div>
+                        
+                        <div className="space-y-2 mb-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600">Tầng:</span>
+                            <span className="text-xs text-gray-900 font-medium">{room.so_tang || '-'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600">Phòng ban:</span>
+                            <span className="text-xs text-gray-900 font-medium">{room.phongBan?.ten_phong_ban || '-'}</span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs text-gray-600">Diện tích:</span>
+                            <span className="text-xs text-gray-900 font-medium">{room.dien_tich ? `${room.dien_tich} m²` : '-'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
+                          <button
+                            onClick={() => handleOpenRoomModal(room)}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors"
+                            title="Chỉnh sửa"
+                          >
+                            <FaEdit className="w-4 h-4" />
+                          </button>
+                          {!isReadOnly && (
+                            <button
+                              onClick={() => handleDeleteRoom(room)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors"
+                              title="Xóa"
+                            >
+                              <FaTrash className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </>
+        )}
       </div>
 
       {/* Modal thêm tài sản */}
@@ -603,15 +1183,32 @@ const AssetSession3 = () => {
 
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Vị trí <span className="text-red-500">*</span>
+                          Phòng
+                        </label>
+                        <select
+                          value={asset.id_phong}
+                          onChange={(e) => handleAssetChange(index, 'id_phong', e.target.value)}
+                          className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="">Chọn phòng (tùy chọn)</option>
+                          {availableRooms.map((room) => (
+                            <option key={room.id} value={room.id}>
+                              {room.so_phong ? `${room.so_phong}` : ''} {room.ten_toa ? `- ${room.ten_toa}` : ''} {room.so_tang ? `(Tầng ${room.so_tang})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Vị trí
                         </label>
                         <input
                           type="text"
-                          required
                           value={asset.location}
                           onChange={(e) => handleAssetChange(index, 'location', e.target.value)}
                           className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="Nhập vị trí"
+                          placeholder="Nhập vị trí (nếu không chọn phòng)"
                         />
                       </div>
 
@@ -657,6 +1254,119 @@ const AssetSession3 = () => {
                           <option value="Hỏng">Hỏng</option>
                           <option value="Có sẵn">Có sẵn</option>
                         </select>
+                      </div>
+                    </div>
+
+                    {/* Upload ảnh */}
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Ảnh phiếu nhận */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Ảnh phiếu nhận
+                        </label>
+                        {!asset.anh_phieu_nhan ? (
+                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                            <input
+                              type="file"
+                              id={`anh-phieu-nhan-${index}`}
+                              accept=".jpg,.jpeg,.png,.pdf"
+                              onChange={(e) => handleAssetImageChange(index, 'anh_phieu_nhan', e.target.files[0] || null)}
+                              className="hidden"
+                            />
+                            <label
+                              htmlFor={`anh-phieu-nhan-${index}`}
+                              className="cursor-pointer flex flex-col items-center"
+                            >
+                              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                                <FaFileUpload className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <p className="text-xs font-medium text-gray-700 mb-1">
+                                Tải lên ảnh phiếu nhận
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                JPG, PNG, PDF (tối đa 10MB)
+                              </p>
+                            </label>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center">
+                                <FaUpload className="w-4 h-4 text-white" />
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-gray-900">
+                                  {asset.anh_phieu_nhan.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {(asset.anh_phieu_nhan.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAssetImage(index, 'anh_phieu_nhan')}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <FaTrashAlt className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Ảnh tài sản ban đầu */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Ảnh tài sản ban đầu
+                        </label>
+                        {!asset.anh_tai_san ? (
+                          <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                            <input
+                              type="file"
+                              id={`anh-tai-san-${index}`}
+                              accept=".jpg,.jpeg,.png,.pdf"
+                              onChange={(e) => handleAssetImageChange(index, 'anh_tai_san', e.target.files[0] || null)}
+                              className="hidden"
+                            />
+                            <label
+                              htmlFor={`anh-tai-san-${index}`}
+                              className="cursor-pointer flex flex-col items-center"
+                            >
+                              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                                <FaFileUpload className="w-5 h-5 text-blue-600" />
+                              </div>
+                              <p className="text-xs font-medium text-gray-700 mb-1">
+                                Tải lên ảnh tài sản
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                JPG, PNG, PDF (tối đa 10MB)
+                              </p>
+                            </label>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center">
+                                <FaUpload className="w-4 h-4 text-white" />
+                              </div>
+                              <div>
+                                <p className="text-xs font-medium text-gray-900">
+                                  {asset.anh_tai_san.name}
+                                </p>
+                                <p className="text-xs text-gray-500">
+                                  {(asset.anh_tai_san.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveAssetImage(index, 'anh_tai_san')}
+                              className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <FaTrashAlt className="w-3 h-3" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -960,6 +1670,192 @@ const AssetSession3 = () => {
                 <FaCheckCircle className="w-4 h-4" />
                 Xác nhận bàn giao
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal thêm/sửa phòng */}
+      {showRoomModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">
+                  {editingRoom ? 'Chỉnh sửa phòng' : 'Thêm phòng mới'}
+                </h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  {editingRoom ? 'Cập nhật thông tin phòng' : 'Thêm phòng mới vào Viện'}
+                </p>
+              </div>
+              <button
+                onClick={handleCloseRoomModal}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleRoomSubmit} className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Phòng ban
+                    </label>
+                    <select
+                      value={roomFormData.id_phong_ban}
+                      onChange={(e) => setRoomFormData({ ...roomFormData, id_phong_ban: e.target.value })}
+                      className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">Chọn phòng ban (tùy chọn)</option>
+                      {phongBans.map((pb) => (
+                        <option key={pb.id} value={pb.id}>
+                          {pb.ten_phong_ban}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Tên tòa
+                    </label>
+                    <input
+                      type="text"
+                      value={roomFormData.ten_toa}
+                      onChange={(e) => setRoomFormData({ ...roomFormData, ten_toa: e.target.value })}
+                      className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Nhập tên tòa"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số tầng
+                    </label>
+                    <input
+                      type="number"
+                      value={roomFormData.so_tang}
+                      onChange={(e) => setRoomFormData({ ...roomFormData, so_tang: e.target.value })}
+                      className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Nhập số tầng"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Số phòng <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={roomFormData.so_phong}
+                      onChange={(e) => setRoomFormData({ ...roomFormData, so_phong: e.target.value })}
+                      className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Nhập số phòng"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Diện tích (m²)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={roomFormData.dien_tich}
+                      onChange={(e) => setRoomFormData({ ...roomFormData, dien_tich: e.target.value })}
+                      className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Nhập diện tích"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Trạng thái <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      required
+                      value={roomFormData.trang_thai}
+                      onChange={(e) => setRoomFormData({ ...roomFormData, trang_thai: e.target.value })}
+                      className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="trong">Trống</option>
+                      <option value="dang_su_dung">Đang sử dụng</option>
+                      <option value="bao_tri">Bảo trì</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  type="button"
+                  onClick={handleCloseRoomModal}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors"
+                >
+                  {editingRoom ? 'Cập nhật' : 'Thêm phòng'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal xác nhận xóa phòng */}
+      {showDeleteRoomConfirm && roomToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="p-6">
+              <div className="flex items-center gap-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                  <FaTrash className="w-6 h-6 text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Xác nhận xóa</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Bạn có chắc chắn muốn xóa phòng này?
+                  </p>
+                </div>
+              </div>
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-sm text-gray-700">
+                  <span className="font-medium">Số phòng:</span> {roomToDelete.so_phong || '-'}
+                </p>
+                <p className="text-sm text-gray-700 mt-1">
+                  <span className="font-medium">Tên tòa:</span> {roomToDelete.ten_toa || '-'}
+                </p>
+              </div>
+              <p className="text-sm text-gray-600 mb-6">
+                Hành động này không thể hoàn tác. Tất cả dữ liệu liên quan đến phòng này sẽ bị xóa vĩnh viễn.
+              </p>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowDeleteRoomConfirm(false);
+                    setRoomToDelete(null);
+                  }}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  onClick={confirmDeleteRoom}
+                  className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors"
+                >
+                  Xóa
+                </button>
+              </div>
             </div>
           </div>
         </div>

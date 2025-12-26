@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaArrowLeft, FaFileExcel, FaFileWord, FaDownload, FaCheck } from 'react-icons/fa';
+import { FaArrowLeft, FaFileExcel, FaDownload, FaCheck, FaSpinner } from 'react-icons/fa';
 import ExcelViewer from '../../components/ExcelViewer';
-import ActivityReportForm from '../../components/rector/ActivityReportForm';
+import { baoCaoAPI } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import * as XLSX from 'xlsx';
 import React from 'react';
 // Import Excel files as URLs
 import bctcFileUrl from '../../assets/Report/BCTC TH 2024 ( 03 biểu) - Copy.xlsx?url';
 import plFileUrl from '../../assets/Report/PL1 - PL2 Bao cao co so KH&CN nam 2024.xlsx?url';
-import docFileUrl from '../../assets/Report/Mẫu báo cáo hoạt động năm 2024  .doc?url';
 const reportTemplates = [
   {
     id: 'bctc',
@@ -20,26 +21,19 @@ const reportTemplates = [
   },
   {
     id: 'pl1',
-    name: 'Phụ lục 1 - Báo cáo hiện trạng nhân lực',
+    name: 'PL1 - PL2 Bao cao cac co so KH&CN',
     description: 'Báo cáo về hiện trạng nhân lực của tổ chức KH&CN',
     file: 'PL1 - PL2 Bao cao co so KH&CN nam 2024.xlsx',
     filePath: plFileUrl,
     sheets: ['PL1 - BC hiện trạng nhân lực', 'PL2 - Thống kê hoạt động KH&CN'],
     defaultSheet: 'PL1 - BC hiện trạng nhân lực',
   },
-  {
-    id: 'activity-report',
-    name: 'Mẫu báo cáo hoạt động năm 2024',
-    description: 'Mẫu báo cáo hoạt động hàng năm của Viện',
-    file: 'Mẫu báo cáo hoạt động năm 2024  .doc',
-    filePath: docFileUrl,
-    sheets: [],
-    isDoc: true,
-  },
 ];
 
 const CreateReport = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const excelViewerRef = useRef(null);
   const [step, setStep] = useState(1);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [reportInfo, setReportInfo] = useState({
@@ -49,12 +43,15 @@ const CreateReport = () => {
     period: '',
     year: new Date().getFullYear().toString(),
   });
+  const [isCreating, setIsCreating] = useState(false);
+  const [excelWorkbook, setExcelWorkbook] = useState(null);
 
   const handleTemplateSelect = (template) => {
     setSelectedTemplate(template);
     setReportInfo({
       ...reportInfo,
       type: template.name,
+      name: template.name, // Tự động điền tên báo cáo
     });
     setStep(2);
   };
@@ -74,17 +71,76 @@ const CreateReport = () => {
     }
   };
 
-  const handleCreateReport = () => {
-    // Simulate creating report
-    console.log('Creating report:', {
-      ...reportInfo,
-      template: selectedTemplate,
-    });
-    
-    // Redirect back to report list
-    setTimeout(() => {
-      navigate('/rector/report');
-    }, 1000);
+  // Hàm xử lý khi ExcelViewer export workbook
+  const handleExcelExport = (workbook, fileName) => {
+    // Lưu workbook để sử dụng khi tạo báo cáo
+    setExcelWorkbook({ workbook, fileName });
+    // Vẫn xuất file xuống máy
+    XLSX.writeFile(workbook, fileName);
+  };
+
+  const handleCreateReport = async () => {
+    if (!user || !user.id) {
+      alert('Vui lòng đăng nhập để tạo báo cáo');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      // Lấy workbook từ ExcelViewer
+      let filePath = null;
+      if (selectedTemplate && !selectedTemplate.isDoc && excelViewerRef.current) {
+        // Lấy workbook từ ExcelViewer (tự động từ data hiện tại)
+        const workbook = excelViewerRef.current.getWorkbook();
+        
+        if (workbook) {
+          // Chuyển đổi workbook thành file và upload
+          const fileName = excelWorkbook?.fileName || `${reportInfo.name || 'bao-cao'}.xlsx`;
+          const wbout = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' });
+          const blob = new Blob([wbout], { type: 'application/octet-stream' });
+          const file = new File([blob], fileName, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          
+          // Upload file lên server
+          try {
+            const uploadResponse = await baoCaoAPI.uploadFile(file);
+            if (uploadResponse.success && uploadResponse.data) {
+              filePath = uploadResponse.data.filePath;
+            } else {
+              throw new Error(uploadResponse.message || 'Upload file thất bại');
+            }
+          } catch (uploadError) {
+            console.error('Lỗi khi upload file:', uploadError);
+            alert('Lỗi khi upload file: ' + uploadError.message);
+            setIsCreating(false);
+            return;
+          }
+        } else {
+          console.warn('Không thể lấy workbook từ ExcelViewer');
+        }
+      }
+
+      // Tạo báo cáo
+      const baoCaoData = {
+        tieu_de: reportInfo.name,
+        id_vien: user.id_vien || null,
+        id_nguoi_tao: user.id,
+        duong_dan_tai_lieu: filePath,
+      };
+
+      const response = await baoCaoAPI.create(baoCaoData);
+      
+      if (response.success) {
+        alert('Tạo báo cáo thành công!');
+        navigate('/rector/report');
+      } else {
+        alert('Lỗi khi tạo báo cáo: ' + (response.message || 'Vui lòng thử lại'));
+      }
+    } catch (error) {
+      console.error('Lỗi khi tạo báo cáo:', error);
+      alert('Lỗi khi tạo báo cáo: ' + error.message);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
@@ -386,14 +442,22 @@ const CreateReport = () => {
           {/* Excel Preview */}
           {selectedTemplate && !selectedTemplate.isDoc && (
             <div className="bg-white rounded-2xl shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Xem trước báo cáo
-              </h2>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">
+                  Xem trước báo cáo
+                </h2>
+                <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2 text-xs text-blue-800">
+                  💡 Chỉnh sửa dữ liệu trong bảng, sau đó click <strong>"Tạo báo cáo"</strong> ở dưới để lưu vào hệ thống
+                </div>
+              </div>
               {selectedTemplate.filePath ? (
                 <ExcelViewer
+                  ref={excelViewerRef}
                   filePath={selectedTemplate.filePath}
-                  fileName={selectedTemplate.file}
+                  fileName={reportInfo.name || selectedTemplate.file}
                   defaultSheet={selectedTemplate.defaultSheet}
+                  allowedSheets={selectedTemplate.sheets}
+                  onExport={handleExcelExport}
                 />
               ) : null}
             </div>
@@ -430,20 +494,39 @@ const CreateReport = () => {
 
           {/* Actions - Only show for non-DOC templates */}
           {selectedTemplate && !selectedTemplate.isDoc && (
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setStep(2)}
-                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-              >
-                Quay lại
-              </button>
-              <button
-                onClick={handleCreateReport}
-                className="px-6 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors flex items-center gap-2"
-              >
-                <FaCheck className="w-4 h-4" />
-                Tạo báo cáo
-              </button>
+            <div className="bg-white rounded-2xl shadow-sm p-6">
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>💡 Hướng dẫn:</strong> Chỉnh sửa dữ liệu trong bảng trên, sau đó click <strong>"Tạo báo cáo"</strong> để lưu vào hệ thống. 
+                  Nút <strong>"Tải xuống Excel"</strong> chỉ để tải file xuống máy tính (tùy chọn).
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setStep(2)}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Quay lại
+                </button>
+                <button
+                  onClick={handleCreateReport}
+                  disabled={isCreating}
+                  className="px-6 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  title="Lưu báo cáo vào hệ thống"
+                >
+                  {isCreating ? (
+                    <>
+                      <FaSpinner className="w-4 h-4 animate-spin" />
+                      Đang tạo...
+                    </>
+                  ) : (
+                    <>
+                      <FaCheck className="w-4 h-4" />
+                      Tạo báo cáo
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           )}
         </div>

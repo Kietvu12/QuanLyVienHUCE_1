@@ -28,6 +28,11 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment: 'Ngày sinh'
     },
+    gioi_tinh: {
+      type: DataTypes.STRING(10),
+      allowNull: true,
+      comment: 'Giới tính: Nam, Nữ, Khác'
+    },
     chuc_vu: {
       type: DataTypes.STRING(100),
       allowNull: true,
@@ -52,6 +57,11 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING(255),
       allowNull: true,
       comment: 'Bằng cấp'
+    },
+    trinh_do: {
+      type: DataTypes.STRING(100),
+      allowNull: true,
+      comment: 'Trình độ: Tiến sĩ, Thạc sĩ, Đại học, Cao đẳng, Trung cấp, Khác'
     },
     so_dien_thoai: {
       type: DataTypes.STRING(20),

@@ -18,6 +18,15 @@ module.exports = (sequelize) => {
       },
       comment: 'ID nhân sự (khóa ngoại)'
     },
+    id_loai_hop_dong: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'loai_hop_dong',
+        key: 'id'
+      },
+      comment: 'ID loại hợp đồng (khóa ngoại)'
+    },
     ma_hop_dong: {
       type: DataTypes.STRING(100),
       allowNull: false,
@@ -53,6 +62,9 @@ module.exports = (sequelize) => {
         fields: ['id_nhan_su']
       },
       {
+        fields: ['id_loai_hop_dong']
+      },
+      {
         fields: ['ma_hop_dong']
       }
     ]
@@ -63,6 +75,12 @@ module.exports = (sequelize) => {
     HopDongLaoDong.belongsTo(models.NhanSu, {
       foreignKey: 'id_nhan_su',
       as: 'nhanSu'
+    });
+
+    // Một hợp đồng lao động thuộc về một loại hợp đồng
+    HopDongLaoDong.belongsTo(models.LoaiHopDong, {
+      foreignKey: 'id_loai_hop_dong',
+      as: 'loaiHopDong'
     });
   };
 

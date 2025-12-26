@@ -458,6 +458,28 @@ export const baoCaoAPI = {
     });
     return response;
   },
+
+  // Upload file cho báo cáo
+  uploadFile: async (file) => {
+    const token = getToken();
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+    const response = await fetch(`${API_BASE_URL}/bao-cao/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || 'Upload failed');
+    }
+    return data;
+  },
 };
 
 // ==================== DE TAI NGHIEN CUU API ====================
@@ -635,6 +657,29 @@ export const taiSanAPI = {
     const response = await apiRequest(endpoint);
     return response;
   },
+
+  uploadMedia: async (id, formData) => {
+    const token = getToken();
+    const response = await fetch(`${API_BASE_URL}/tai-san/${id}/media`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.message || `HTTP error! status: ${response.status}`);
+    }
+    return data;
+  },
+
+  removeMedia: async (id, mediaId) => {
+    const response = await apiRequest(`/tai-san/${id}/media/${mediaId}`, {
+      method: 'DELETE',
+    });
+    return response;
+  },
 };
 
 // ==================== PHONG CUA VIEN API ====================
@@ -789,6 +834,22 @@ export const baoHiemYTeAPI = {
     const response = await apiRequest(`/bao-hiem-y-te/${id}`, {
       method: 'DELETE',
     });
+    return response;
+  },
+};
+
+// ==================== LOAI HOP DONG API ====================
+
+export const loaiHopDongAPI = {
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const endpoint = `/loai-hop-dong${queryString ? `?${queryString}` : ''}`;
+    const response = await apiRequest(endpoint);
+    return response;
+  },
+
+  getById: async (id) => {
+    const response = await apiRequest(`/loai-hop-dong/${id}`);
     return response;
   },
 };
@@ -958,6 +1019,7 @@ export default {
   phongBan: phongBanAPI,
   baoHiemYTe: baoHiemYTeAPI,
   thongTinXe: thongTinXeAPI,
+  loaiHopDong: loaiHopDongAPI,
   mediaNhanSu: mediaNhanSuAPI,
   nhanSuStatistics: nhanSuStatisticsAPI,
   hopDongStatistics: hopDongStatisticsAPI,
