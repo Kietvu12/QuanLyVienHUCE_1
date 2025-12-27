@@ -2160,7 +2160,8 @@ const AddEditModal = ({ type, nhanSuId, editingItem, onClose, onSuccess }) => {
 const PersonnelSession3 = () => {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('nhan-su');
-  const isReadOnly = user?.role === 'accountant';
+  // Kế toán có thể thêm/sửa/xóa nhân sự
+  const isReadOnly = false;
 
   return (
     <section className="px-6">

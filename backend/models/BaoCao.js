@@ -56,6 +56,11 @@ module.exports = (sequelize) => {
       type: DataTypes.DATE,
       allowNull: true,
       comment: 'Ngày gửi'
+    },
+    ly_do_tu_choi: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Lý do từ chối báo cáo'
     }
   }, {
     tableName: 'bao_cao',

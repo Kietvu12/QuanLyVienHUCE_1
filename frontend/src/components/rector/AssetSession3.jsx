@@ -21,7 +21,8 @@ const getStatusColor = (status) => {
 
 const AssetSession3 = () => {
   const { user } = useAuth();
-  const isReadOnly = user?.role === 'accountant';
+  // Kế toán có thể thêm/sửa/xóa tài sản và phòng
+  const isReadOnly = false;
   
   // Tab state
   const [activeTab, setActiveTab] = useState('assets'); // 'assets' or 'rooms'
@@ -45,10 +46,11 @@ const AssetSession3 = () => {
   ]);
   const [availableRooms, setAvailableRooms] = useState([]);
   const [transferDocument, setTransferDocument] = useState(null);
+  const [daBanGiaoLai, setDaBanGiaoLai] = useState(false);
   const [selectedAssets, setSelectedAssets] = useState([]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
-  const [transferFiles, setTransferFiles] = useState([]);
+  const [transferFiles, setTransferFiles] = useState({}); // Object với key là assetId
   const [searchAssetTerm, setSearchAssetTerm] = useState('');
   const [selectedAssetCategory, setSelectedAssetCategory] = useState('');
   const [selectedAssetStatus, setSelectedAssetStatus] = useState('');
@@ -77,6 +79,25 @@ const AssetSession3 = () => {
   const [roomToDelete, setRoomToDelete] = useState(null);
   const [searchRoomTerm, setSearchRoomTerm] = useState('');
   const [selectedRoomStatus, setSelectedRoomStatus] = useState('');
+  
+  // Modal xem và sửa tài sản
+  const [showViewAssetModal, setShowViewAssetModal] = useState(false);
+  const [showEditAssetModal, setShowEditAssetModal] = useState(false);
+  const [viewingAsset, setViewingAsset] = useState(null);
+  const [editingAsset, setEditingAsset] = useState(null);
+  const [editAssetForm, setEditAssetForm] = useState({
+    ten_tai_san: '',
+    id_phong: '',
+    tinh_trang: 'tot',
+    ngay_nhan_tai_san: '',
+    ngay_ban_giao_tai_san: '',
+    gia_tri: '',
+    anh_phieu_nhan: null,
+    anh_tai_san: null,
+  });
+  const [currentMedia, setCurrentMedia] = useState(null);
+  const [daBanGiaoLaiEdit, setDaBanGiaoLaiEdit] = useState(false);
+  const [transferDocumentEdit, setTransferDocumentEdit] = useState(null);
 
   const handleAddAssetRow = () => {
     setAssetsForm([
@@ -143,6 +164,7 @@ const AssetSession3 = () => {
                      asset.status === 'Cần bảo trì' ? 'can_bao_tri' : 
                      asset.status === 'Hỏng' ? 'hong' : 'tot',
           ngay_nhan_tai_san: asset.purchaseDate || null,
+          gia_tri: asset.purchasePrice ? parseFloat(asset.purchasePrice.replace(/[^\d]/g, '')) : null,
         };
 
         const response = await taiSanAPI.create(assetData);
@@ -182,6 +204,7 @@ const AssetSession3 = () => {
         },
       ]);
       setTransferDocument(null);
+      setDaBanGiaoLai(false);
       fetchAssets(); // Refresh danh sách tài sản
     } catch (error) {
       console.error('Lỗi khi thêm tài sản:', error);
@@ -205,6 +228,7 @@ const AssetSession3 = () => {
         },
       ]);
       setTransferDocument(null);
+      setDaBanGiaoLai(false);
   };
 
   // Fetch rooms when opening asset modal
@@ -265,27 +289,62 @@ const AssetSession3 = () => {
     }
   };
 
-  const handleTransferSelected = () => {
+  const handleTransferSelected = async () => {
+    // Đảm bảo assets đã được load trước khi mở modal
+    if (assets.length === 0) {
+      await fetchAssets();
+    }
     setShowTransferModal(true);
   };
 
-  const handleTransferFileChange = (e) => {
-    const newFiles = Array.from(e.target.files);
-    setTransferFiles((prev) => [...prev, ...newFiles]);
+  const handleTransferFileChange = (assetId, e) => {
+    const file = e.target.files[0] || null;
+    if (file) {
+      setTransferFiles((prev) => ({
+        ...prev,
+        [assetId]: file
+      }));
+    }
   };
 
-  const handleRemoveTransferFile = (index) => {
-    setTransferFiles(transferFiles.filter((_, i) => i !== index));
+  const handleRemoveTransferFile = (assetId) => {
+    setTransferFiles((prev) => {
+      const newFiles = { ...prev };
+      delete newFiles[assetId];
+      return newFiles;
+    });
   };
 
-  const handleSubmitTransfer = () => {
-    // Xử lý bàn giao lại
-    console.log('Transferring assets:', selectedAssets);
-    console.log('Transfer files:', transferFiles);
-    setSelectedAssets([]);
-    setTransferFiles([]);
-    setShowTransferModal(false);
-    // TODO: Gọi API để bàn giao lại
+  const handleSubmitTransfer = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Bàn giao từng tài sản với file riêng của nó
+      for (const assetId of selectedAssets) {
+        const assetData = {
+          ngay_ban_giao_tai_san: today,
+        };
+
+        // Cập nhật ngày bàn giao
+        await taiSanAPI.update(assetId, assetData);
+
+        // Upload phiếu bàn giao nếu có
+        if (transferFiles[assetId]) {
+          const formData = new FormData();
+          formData.append('anh_phieu_ban_giao', transferFiles[assetId]);
+          await taiSanAPI.uploadMedia(assetId, formData);
+        }
+      }
+
+      alert(`Bàn giao thành công ${selectedAssets.length} tài sản!`);
+      setSelectedAssets([]);
+      setTransferFiles({});
+      setShowTransferModal(false);
+      fetchAssets(); // Refresh danh sách
+    } catch (error) {
+      console.error('Lỗi khi bàn giao tài sản:', error);
+      alert('Có lỗi xảy ra khi bàn giao tài sản');
+    }
   };
 
   // Room management functions
@@ -540,6 +599,136 @@ const AssetSession3 = () => {
     return date.toLocaleDateString('vi-VN');
   };
 
+  const formatCurrency = (value) => {
+    if (!value) return '-';
+    const numValue = typeof value === 'string' ? parseFloat(value.replace(/[^\d]/g, '')) : value;
+    if (isNaN(numValue)) return '-';
+    return new Intl.NumberFormat('vi-VN', { 
+      style: 'currency', 
+      currency: 'VND',
+      maximumFractionDigits: 0 
+    }).format(numValue);
+  };
+
+  // Handler xem chi tiết tài sản
+  const handleViewAsset = async (assetId) => {
+    try {
+      const response = await taiSanAPI.getById(assetId);
+      if (response.success) {
+        setViewingAsset(response.data);
+        setShowViewAssetModal(true);
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy thông tin tài sản:', error);
+      alert('Có lỗi xảy ra khi lấy thông tin tài sản');
+    }
+  };
+
+  // Handler mở modal sửa tài sản
+  const handleEditAsset = async (assetId) => {
+    try {
+      const response = await taiSanAPI.getById(assetId);
+      if (response.success) {
+        const asset = response.data;
+        setEditingAsset(asset);
+        setCurrentMedia(asset.mediaTaiSan || null);
+        const hasBanGiao = !!asset.ngay_ban_giao_tai_san;
+        setDaBanGiaoLaiEdit(hasBanGiao);
+        setTransferDocumentEdit(null);
+        setEditAssetForm({
+          ten_tai_san: asset.ten_tai_san || '',
+          id_phong: asset.id_phong || '',
+          tinh_trang: asset.tinh_trang || 'tot',
+          ngay_nhan_tai_san: asset.ngay_nhan_tai_san ? asset.ngay_nhan_tai_san.split('T')[0] : '',
+          ngay_ban_giao_tai_san: asset.ngay_ban_giao_tai_san ? asset.ngay_ban_giao_tai_san.split('T')[0] : '',
+          gia_tri: asset.gia_tri || asset.gia_tri_tai_san || '',
+          anh_phieu_nhan: null,
+          anh_tai_san: null,
+        });
+        setShowEditAssetModal(true);
+        // Fetch rooms nếu chưa có
+        if (availableRooms.length === 0 && user?.id_vien) {
+          const roomsResponse = await phongCuaVienAPI.getAll({
+            id_vien: user?.id_vien,
+            page: 1,
+            limit: 1000,
+          });
+          if (roomsResponse.success) {
+            setAvailableRooms(roomsResponse.data || []);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy thông tin tài sản:', error);
+      alert('Có lỗi xảy ra khi lấy thông tin tài sản');
+    }
+  };
+
+  // Handler submit sửa tài sản
+  const handleSubmitEditAsset = async (e) => {
+    e.preventDefault();
+    if (!editingAsset) return;
+
+    try {
+      const assetData = {
+        id_vien: user?.id_vien,
+        id_phong: editAssetForm.id_phong || null,
+        ten_tai_san: editAssetForm.ten_tai_san,
+        tinh_trang: editAssetForm.tinh_trang,
+        ngay_nhan_tai_san: editAssetForm.ngay_nhan_tai_san || null,
+        ngay_ban_giao_tai_san: editAssetForm.ngay_ban_giao_tai_san || null,
+        gia_tri: editAssetForm.gia_tri ? parseFloat(editAssetForm.gia_tri) : null,
+      };
+
+      await taiSanAPI.update(editingAsset.id, assetData);
+
+      // Upload media nếu có
+      if (editAssetForm.anh_phieu_nhan || editAssetForm.anh_tai_san || transferDocumentEdit) {
+        const formData = new FormData();
+        if (editAssetForm.anh_phieu_nhan) {
+          formData.append('anh_phieu_nhan', editAssetForm.anh_phieu_nhan);
+        }
+        if (editAssetForm.anh_tai_san) {
+          formData.append('anh_tai_san', editAssetForm.anh_tai_san);
+        }
+        if (transferDocumentEdit) {
+          formData.append('anh_phieu_ban_giao', transferDocumentEdit);
+        }
+        await taiSanAPI.uploadMedia(editingAsset.id, formData);
+      }
+
+      alert('Cập nhật tài sản thành công!');
+      setShowEditAssetModal(false);
+      setEditingAsset(null);
+      setDaBanGiaoLaiEdit(false);
+      setTransferDocumentEdit(null);
+      fetchAssets(); // Refresh danh sách
+    } catch (error) {
+      console.error('Lỗi khi cập nhật tài sản:', error);
+      alert('Có lỗi xảy ra khi cập nhật tài sản');
+    }
+  };
+
+
+  // Handler đóng modal sửa
+  const handleCloseEditModal = () => {
+    setShowEditAssetModal(false);
+    setEditingAsset(null);
+    setCurrentMedia(null);
+    setDaBanGiaoLaiEdit(false);
+    setTransferDocumentEdit(null);
+    setEditAssetForm({
+      ten_tai_san: '',
+      id_phong: '',
+      tinh_trang: 'tot',
+      ngay_nhan_tai_san: '',
+      ngay_ban_giao_tai_san: '',
+      gia_tri: '',
+      anh_phieu_nhan: null,
+      anh_tai_san: null,
+    });
+  };
+
   return (
     <section className="px-6">
       <div className="rounded-2xl bg-white shadow-sm px-6 py-5">
@@ -735,7 +924,11 @@ const AssetSession3 = () => {
                       </td>
                       <td className="py-4 px-4">
                         <div className="flex items-center justify-center gap-2">
-                          <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Xem chi tiết">
+                          <button 
+                            onClick={() => handleViewAsset(asset.id)}
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" 
+                            title="Xem chi tiết"
+                          >
                             <FaEye className="w-4 h-4" />
                           </button>
                           {!isReadOnly && (
@@ -743,7 +936,11 @@ const AssetSession3 = () => {
                               <button className="p-1.5 text-yellow-600 hover:bg-yellow-50 rounded transition-colors" title="Bảo trì">
                                 <FaTools className="w-4 h-4" />
                               </button>
-                              <button className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors" title="Chỉnh sửa">
+                              <button 
+                                onClick={() => handleEditAsset(asset.id)}
+                                className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors" 
+                                title="Chỉnh sửa"
+                              >
                                 <FaEdit className="w-4 h-4" />
                               </button>
                               <button
@@ -816,7 +1013,11 @@ const AssetSession3 = () => {
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
-                    <button className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Xem chi tiết">
+                    <button 
+                      onClick={() => handleViewAsset(asset.id)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors" 
+                      title="Xem chi tiết"
+                    >
                       <FaEye className="w-4 h-4" />
                     </button>
                     {!isReadOnly && (
@@ -824,7 +1025,11 @@ const AssetSession3 = () => {
                         <button className="p-2 text-yellow-600 hover:bg-yellow-50 rounded transition-colors" title="Bảo trì">
                           <FaTools className="w-4 h-4" />
                         </button>
-                        <button className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors" title="Chỉnh sửa">
+                        <button 
+                          onClick={() => handleEditAsset(asset.id)}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded transition-colors" 
+                          title="Chỉnh sửa"
+                        >
                           <FaEdit className="w-4 h-4" />
                         </button>
                         <button
@@ -1373,61 +1578,85 @@ const AssetSession3 = () => {
                 ))}
               </div>
 
-              {/* Upload phiếu bàn giao */}
+              {/* Trạng thái bàn giao và Upload phiếu bàn giao */}
               <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Phiếu bàn giao
-                </h3>
-                <div className="space-y-4">
-                  {!transferDocument ? (
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
-                      <input
-                        type="file"
-                        id="transfer-document"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        onChange={handleFileChange}
-                        className="hidden"
-                      />
-                      <label
-                        htmlFor="transfer-document"
-                        className="cursor-pointer flex flex-col items-center"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
-                          <FaFileUpload className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <p className="text-sm font-medium text-gray-700 mb-1">
-                          Tải lên phiếu bàn giao
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          PDF, DOC, DOCX, JPG, PNG (tối đa 10MB)
-                        </p>
-                      </label>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
-                          <FaUpload className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {transferDocument.name}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {(transferDocument.size / 1024 / 1024).toFixed(2)} MB
-                          </p>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleRemoveFile}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <FaTrashAlt className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={daBanGiaoLai}
+                      onChange={(e) => {
+                        setDaBanGiaoLai(e.target.checked);
+                        if (!e.target.checked) {
+                          setTransferDocument(null);
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Đã bàn giao lại
+                    </span>
+                  </label>
                 </div>
+
+                {/* Upload phiếu bàn giao - chỉ hiển thị khi đánh dấu "đã bàn giao lại" */}
+                {daBanGiaoLai && (
+                  <>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Phiếu bàn giao
+                    </h3>
+                    <div className="space-y-4">
+                      {!transferDocument ? (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+                          <input
+                            type="file"
+                            id="transfer-document"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            onChange={handleFileChange}
+                            className="hidden"
+                          />
+                          <label
+                            htmlFor="transfer-document"
+                            className="cursor-pointer flex flex-col items-center"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
+                              <FaFileUpload className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <p className="text-sm font-medium text-gray-700 mb-1">
+                              Tải lên phiếu bàn giao
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              PDF, DOC, DOCX, JPG, PNG (tối đa 10MB)
+                            </p>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                              <FaUpload className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {transferDocument.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {(transferDocument.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveFile}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <FaTrashAlt className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Footer */}
@@ -1504,7 +1733,7 @@ const AssetSession3 = () => {
               <button
                 onClick={() => {
                   setShowTransferModal(false);
-                  setTransferFiles([]);
+                  setTransferFiles({});
                 }}
                 className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
               >
@@ -1535,119 +1764,94 @@ const AssetSession3 = () => {
                         <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
                           Tình trạng
                         </th>
+                        <th className="text-center py-3 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                          Phiếu bàn giao
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {assets
                         .filter((asset) => selectedAssets.includes(asset.id))
-                        .map((asset) => (
-                          <tr key={asset.id} className="border-b border-gray-100">
-                            <td className="py-3 px-4">
-                              <span className="text-sm font-medium text-blue-600">{asset.id}</span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className="text-sm font-medium text-gray-900">{asset.name}</span>
-                            </td>
-                            <td className="py-3 px-4">
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                {asset.category}
-                              </span>
-                            </td>
-                            <td className="py-3 px-4 text-center">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(asset.status)}`}>
-                                {asset.status}
-                              </span>
+                        .length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="py-8 text-center text-gray-500">
+                              Không tìm thấy tài sản đã chọn
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          assets
+                            .filter((asset) => selectedAssets.includes(asset.id))
+                            .map((asset) => (
+                              <tr key={asset.id} className="border-b border-gray-100">
+                                <td className="py-3 px-4">
+                                  <span className="text-sm font-medium text-blue-600">TS-{asset.id}</span>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <span className="text-sm font-medium text-gray-900">{asset.ten_tai_san || '-'}</span>
+                                </td>
+                                <td className="py-3 px-4">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                    {asset.ten_tai_san?.split(' ')[0] || '-'}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4 text-center">
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getAssetStatusColor(asset.tinh_trang)}`}>
+                                    {getAssetStatusLabel(asset.tinh_trang)}
+                                  </span>
+                                </td>
+                                <td className="py-3 px-4">
+                                  {transferFiles[asset.id] ? (
+                                    <div className="flex items-center justify-between gap-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center flex-shrink-0">
+                                          <FaUpload className="w-3 h-3 text-white" />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                          <p className="text-xs font-medium text-gray-900 truncate">
+                                            {transferFiles[asset.id].name}
+                                          </p>
+                                          <p className="text-xs text-gray-500">
+                                            {(transferFiles[asset.id].size / 1024 / 1024).toFixed(2)} MB
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRemoveTransferFile(asset.id)}
+                                        className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors flex-shrink-0"
+                                      >
+                                        <FaTrashAlt className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 text-center hover:border-blue-400 transition-colors">
+                                      <input
+                                        type="file"
+                                        id={`transfer-file-${asset.id}`}
+                                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                                        onChange={(e) => handleTransferFileChange(asset.id, e)}
+                                        className="hidden"
+                                      />
+                                      <label
+                                        htmlFor={`transfer-file-${asset.id}`}
+                                        className="cursor-pointer flex flex-col items-center"
+                                      >
+                                        <FaFileUpload className="w-4 h-4 text-blue-600 mb-1" />
+                                        <p className="text-xs font-medium text-gray-700">
+                                          Tải lên
+                                        </p>
+                                      </label>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            ))
+                        )}
                     </tbody>
                   </table>
                 </div>
               </div>
 
-              {/* Upload phiếu bàn giao */}
-              <div className="border-t border-gray-200 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Phiếu bàn giao (Hình ảnh/Tài liệu)
-                </h3>
-                <div className="space-y-4">
-                  {transferFiles.length === 0 ? (
-                    <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
-                      <input
-                        type="file"
-                        id="transfer-files"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        multiple
-                        onChange={handleTransferFileChange}
-                        className="hidden"
-                      />
-                      <label
-                        htmlFor="transfer-files"
-                        className="cursor-pointer flex flex-col items-center"
-                      >
-                        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
-                          <FaFileUpload className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <p className="text-sm font-medium text-gray-700 mb-1">
-                          Tải lên phiếu bàn giao
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          PDF, DOC, DOCX, JPG, PNG (tối đa 10MB mỗi file)
-                        </p>
-                      </label>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {transferFiles.map((file, index) => (
-                        <div
-                          key={index}
-                          className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
-                              <FaUpload className="w-5 h-5 text-white" />
-                            </div>
-                            <div>
-                              <p className="text-sm font-medium text-gray-900">
-                                {file.name}
-                              </p>
-                              <p className="text-xs text-gray-500">
-                                {(file.size / 1024 / 1024).toFixed(2)} MB
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveTransferFile(index)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <FaTrashAlt className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
-                        <input
-                          type="file"
-                          id="transfer-files-add"
-                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                          multiple
-                          onChange={handleTransferFileChange}
-                          className="hidden"
-                        />
-                        <label
-                          htmlFor="transfer-files-add"
-                          className="cursor-pointer flex flex-col items-center"
-                        >
-                          <FaPlus className="w-5 h-5 text-gray-400 mb-2" />
-                          <p className="text-sm font-medium text-gray-700">
-                            Thêm file khác
-                          </p>
-                        </label>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
             </div>
 
             {/* Footer */}
@@ -1656,7 +1860,7 @@ const AssetSession3 = () => {
                 type="button"
                 onClick={() => {
                   setShowTransferModal(false);
-                  setTransferFiles([]);
+                  setTransferFiles({});
                 }}
                 className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
               >
@@ -1857,6 +2061,595 @@ const AssetSession3 = () => {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal xem chi tiết tài sản */}
+      {showViewAssetModal && viewingAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Chi tiết tài sản</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Thông tin chi tiết về tài sản
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowViewAssetModal(false);
+                  setViewingAsset(null);
+                }}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-4">Thông tin cơ bản</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Mã tài sản</label>
+                      <p className="text-sm font-semibold text-gray-900 mt-1">TS-{viewingAsset.id}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Tên tài sản</label>
+                      <p className="text-sm text-gray-900 mt-1">{viewingAsset.ten_tai_san || '-'}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Trạng thái</label>
+                      <p className="mt-1">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getAssetStatusColor(viewingAsset.tinh_trang)}`}>
+                          {getAssetStatusLabel(viewingAsset.tinh_trang)}
+                        </span>
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Phòng</label>
+                      <p className="text-sm text-gray-900 mt-1">
+                        {viewingAsset.phong ? `${viewingAsset.phong.so_phong || ''} ${viewingAsset.phong.ten_toa ? `- ${viewingAsset.phong.ten_toa}` : ''}` : '-'}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Giá trị (VND)</label>
+                      <p className="text-sm font-semibold text-gray-900 mt-1">
+                        {formatCurrency(viewingAsset.gia_tri || viewingAsset.gia_tri_tai_san)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-4">Thông tin ngày tháng</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Ngày nhận tài sản</label>
+                      <p className="text-sm text-gray-900 mt-1">{formatDate(viewingAsset.ngay_nhan_tai_san)}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Ngày bàn giao tài sản</label>
+                      <p className="text-sm text-gray-900 mt-1">{formatDate(viewingAsset.ngay_ban_giao_tai_san)}</p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500">Viện</label>
+                      <p className="text-sm text-gray-900 mt-1">{viewingAsset.vien?.ten_vien || '-'}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Media */}
+              {viewingAsset.mediaTaiSan && (
+                <div className="mt-6">
+                  <h3 className="text-sm font-semibold text-gray-700 mb-4">Hình ảnh</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {viewingAsset.mediaTaiSan.anh_phieu_nhan && (
+                      <div className="border border-gray-200 rounded-lg p-4">
+                        <label className="text-xs font-medium text-gray-500 mb-2 block">Ảnh phiếu nhận</label>
+                        <img 
+                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${viewingAsset.mediaTaiSan.anh_phieu_nhan}`} 
+                          alt="Ảnh phiếu nhận"
+                          className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const errorMsg = e.target.nextElementSibling;
+                            if (errorMsg) errorMsg.style.display = 'block';
+                          }}
+                        />
+                        <p className="text-xs text-red-500 mt-2 hidden">Không thể tải ảnh</p>
+                        <p className="text-xs text-gray-500 mt-2 hidden">Không thể tải ảnh</p>
+                      </div>
+                    )}
+                    {viewingAsset.mediaTaiSan.anh_tai_san && (
+                      <div className="border border-gray-200 rounded-lg p-4">
+                        <label className="text-xs font-medium text-gray-500 mb-2 block">Ảnh tài sản</label>
+                        <img 
+                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${viewingAsset.mediaTaiSan.anh_tai_san}`} 
+                          alt="Ảnh tài sản"
+                          className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const errorMsg = e.target.nextElementSibling;
+                            if (errorMsg) errorMsg.style.display = 'block';
+                          }}
+                        />
+                        <p className="text-xs text-red-500 mt-2 hidden">Không thể tải ảnh</p>
+                        <p className="text-xs text-gray-500 mt-2 hidden">Không thể tải ảnh</p>
+                      </div>
+                    )}
+                    {viewingAsset.mediaTaiSan.anh_phieu_ban_giao && (
+                      <div className="border border-gray-200 rounded-lg p-4">
+                        <label className="text-xs font-medium text-gray-500 mb-2 block">Ảnh phiếu bàn giao</label>
+                        <img 
+                          src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${viewingAsset.mediaTaiSan.anh_phieu_ban_giao}`} 
+                          alt="Ảnh phiếu bàn giao"
+                          className="w-full h-48 object-cover rounded-lg border border-gray-200"
+                          onError={(e) => {
+                            e.target.style.display = 'none';
+                            const errorMsg = e.target.nextElementSibling;
+                            if (errorMsg) errorMsg.style.display = 'block';
+                          }}
+                        />
+                        <p className="text-xs text-red-500 mt-2 hidden">Không thể tải ảnh</p>
+                        <p className="text-xs text-gray-500 mt-2 hidden">Không thể tải ảnh</p>
+                      </div>
+                    )}
+                    {!viewingAsset.mediaTaiSan.anh_phieu_nhan && !viewingAsset.mediaTaiSan.anh_tai_san && !viewingAsset.mediaTaiSan.anh_phieu_ban_giao && (
+                      <div className="col-span-2 text-center py-8 text-gray-500">
+                        Chưa có hình ảnh
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-gray-200">
+              <button
+                onClick={() => {
+                  setShowViewAssetModal(false);
+                  setViewingAsset(null);
+                }}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                Đóng
+              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={() => {
+                    setShowViewAssetModal(false);
+                    handleEditAsset(viewingAsset.id);
+                  }}
+                  className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Chỉnh sửa
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal sửa tài sản */}
+      {showEditAssetModal && editingAsset && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">Chỉnh sửa tài sản</h2>
+                <p className="text-sm text-gray-500 mt-1">
+                  Cập nhật thông tin tài sản TS-{editingAsset.id}
+                </p>
+              </div>
+              <button
+                onClick={handleCloseEditModal}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <form onSubmit={handleSubmitEditAsset} className="flex-1 overflow-y-auto px-6 py-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Tên tài sản <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={editAssetForm.ten_tai_san}
+                    onChange={(e) => setEditAssetForm({ ...editAssetForm, ten_tai_san: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Nhập tên tài sản"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Phòng
+                  </label>
+                  <select
+                    value={editAssetForm.id_phong}
+                    onChange={(e) => setEditAssetForm({ ...editAssetForm, id_phong: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="">Chọn phòng (tùy chọn)</option>
+                    {availableRooms.map((room) => (
+                      <option key={room.id} value={room.id}>
+                        {room.so_phong ? `${room.so_phong}` : ''} {room.ten_toa ? `- ${room.ten_toa}` : ''} {room.so_tang ? `(Tầng ${room.so_tang})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Trạng thái <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    required
+                    value={editAssetForm.tinh_trang}
+                    onChange={(e) => setEditAssetForm({ ...editAssetForm, tinh_trang: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="tot">Đang sử dụng</option>
+                    <option value="can_bao_tri">Cần bảo trì</option>
+                    <option value="hong">Hỏng</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ngày nhận tài sản
+                  </label>
+                  <input
+                    type="date"
+                    value={editAssetForm.ngay_nhan_tai_san}
+                    onChange={(e) => setEditAssetForm({ ...editAssetForm, ngay_nhan_tai_san: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ngày bàn giao tài sản
+                  </label>
+                  <input
+                    type="date"
+                    value={editAssetForm.ngay_ban_giao_tai_san}
+                    onChange={(e) => setEditAssetForm({ ...editAssetForm, ngay_ban_giao_tai_san: e.target.value })}
+                    className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Giá trị (VND)
+                  </label>
+                  <input
+                    type="text"
+                    value={editAssetForm.gia_tri}
+                    onChange={(e) => {
+                      // Chỉ cho phép nhập số
+                      const value = e.target.value.replace(/[^\d]/g, '');
+                      setEditAssetForm({ ...editAssetForm, gia_tri: value });
+                    }}
+                    className="w-full h-9 px-3 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Nhập giá trị (VND)"
+                  />
+                  {editAssetForm.gia_tri && (
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formatCurrency(editAssetForm.gia_tri)}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Upload ảnh */}
+              <div className="mt-6">
+                <h3 className="text-sm font-semibold text-gray-700 mb-4">Hình ảnh</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Ảnh phiếu nhận */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Ảnh phiếu nhận
+                    </label>
+                    {editAssetForm.anh_phieu_nhan ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center">
+                              <FaUpload className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-gray-900">
+                                {editAssetForm.anh_phieu_nhan.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {(editAssetForm.anh_phieu_nhan.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setEditAssetForm({ ...editAssetForm, anh_phieu_nhan: null })}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <FaTrashAlt className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-blue-600">Ảnh mới sẽ thay thế ảnh hiện có</p>
+                      </div>
+                    ) : currentMedia?.anh_phieu_nhan ? (
+                      <div className="space-y-2">
+                        <div className="border border-gray-200 rounded-lg p-2">
+                          <img 
+                            src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${currentMedia.anh_phieu_nhan}`} 
+                            alt="Ảnh phiếu nhận hiện tại"
+                            className="w-full h-32 object-cover rounded-lg"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              const errorMsg = e.target.nextElementSibling;
+                              if (errorMsg) errorMsg.style.display = 'block';
+                            }}
+                          />
+                          <p className="text-xs text-red-500 mt-1 hidden">Không thể tải ảnh</p>
+                        </div>
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center hover:border-blue-400 transition-colors">
+                          <input
+                            type="file"
+                            id="edit-anh-phieu-nhan"
+                            accept=".jpg,.jpeg,.png,.pdf"
+                            onChange={(e) => setEditAssetForm({ ...editAssetForm, anh_phieu_nhan: e.target.files[0] || null })}
+                            className="hidden"
+                          />
+                          <label
+                            htmlFor="edit-anh-phieu-nhan"
+                            className="cursor-pointer flex flex-col items-center"
+                          >
+                            <FaFileUpload className="w-5 h-5 text-blue-600 mb-1" />
+                            <p className="text-xs font-medium text-gray-700">
+                              Thay thế ảnh
+                            </p>
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                        <input
+                          type="file"
+                          id="edit-anh-phieu-nhan"
+                          accept=".jpg,.jpeg,.png,.pdf"
+                          onChange={(e) => setEditAssetForm({ ...editAssetForm, anh_phieu_nhan: e.target.files[0] || null })}
+                          className="hidden"
+                        />
+                        <label
+                          htmlFor="edit-anh-phieu-nhan"
+                          className="cursor-pointer flex flex-col items-center"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                            <FaFileUpload className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <p className="text-xs font-medium text-gray-700 mb-1">
+                            Tải lên ảnh phiếu nhận
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            JPG, PNG, PDF (tối đa 10MB)
+                          </p>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Ảnh tài sản */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Ảnh tài sản
+                    </label>
+                    {editAssetForm.anh_tai_san ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 rounded bg-blue-500 flex items-center justify-center">
+                              <FaUpload className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-medium text-gray-900">
+                                {editAssetForm.anh_tai_san.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {(editAssetForm.anh_tai_san.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setEditAssetForm({ ...editAssetForm, anh_tai_san: null })}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                          >
+                            <FaTrashAlt className="w-3 h-3" />
+                          </button>
+                        </div>
+                        <p className="text-xs text-blue-600">Ảnh mới sẽ thay thế ảnh hiện có</p>
+                      </div>
+                    ) : currentMedia?.anh_tai_san ? (
+                      <div className="space-y-2">
+                        <div className="border border-gray-200 rounded-lg p-2">
+                          <img 
+                            src={`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}${currentMedia.anh_tai_san}`} 
+                            alt="Ảnh tài sản hiện tại"
+                            className="w-full h-32 object-cover rounded-lg"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                              const errorMsg = e.target.nextElementSibling;
+                              if (errorMsg) errorMsg.style.display = 'block';
+                            }}
+                          />
+                          <p className="text-xs text-red-500 mt-1 hidden">Không thể tải ảnh</p>
+                        </div>
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-3 text-center hover:border-blue-400 transition-colors">
+                          <input
+                            type="file"
+                            id="edit-anh-tai-san"
+                            accept=".jpg,.jpeg,.png,.pdf"
+                            onChange={(e) => setEditAssetForm({ ...editAssetForm, anh_tai_san: e.target.files[0] || null })}
+                            className="hidden"
+                          />
+                          <label
+                            htmlFor="edit-anh-tai-san"
+                            className="cursor-pointer flex flex-col items-center"
+                          >
+                            <FaFileUpload className="w-5 h-5 text-blue-600 mb-1" />
+                            <p className="text-xs font-medium text-gray-700">
+                              Thay thế ảnh
+                            </p>
+                          </label>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-blue-400 transition-colors">
+                        <input
+                          type="file"
+                          id="edit-anh-tai-san"
+                          accept=".jpg,.jpeg,.png,.pdf"
+                          onChange={(e) => setEditAssetForm({ ...editAssetForm, anh_tai_san: e.target.files[0] || null })}
+                          className="hidden"
+                        />
+                        <label
+                          htmlFor="edit-anh-tai-san"
+                          className="cursor-pointer flex flex-col items-center"
+                        >
+                          <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center mb-2">
+                            <FaFileUpload className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <p className="text-xs font-medium text-gray-700 mb-1">
+                            Tải lên ảnh tài sản
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            JPG, PNG, PDF (tối đa 10MB)
+                          </p>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Trạng thái bàn giao và Upload phiếu bàn giao */}
+              <div className="border-t border-gray-200 pt-6 mt-6">
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={daBanGiaoLaiEdit}
+                      onChange={(e) => {
+                        const isChecked = e.target.checked;
+                        setDaBanGiaoLaiEdit(isChecked);
+                        if (isChecked) {
+                          // Tự động cập nhật ngày bàn giao thành ngày hiện tại
+                          const today = new Date().toISOString().split('T')[0];
+                          setEditAssetForm({ ...editAssetForm, ngay_ban_giao_tai_san: today });
+                        } else {
+                          // Bỏ check thì xóa file và ngày bàn giao
+                          setTransferDocumentEdit(null);
+                          setEditAssetForm({ ...editAssetForm, ngay_ban_giao_tai_san: '' });
+                        }
+                      }}
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Đã bàn giao lại
+                    </span>
+                  </label>
+                </div>
+
+                {/* Upload phiếu bàn giao - chỉ hiển thị khi đánh dấu "đã bàn giao lại" */}
+                {daBanGiaoLaiEdit && (
+                  <>
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                      Phiếu bàn giao
+                    </h3>
+                    <div className="space-y-4">
+                      {!transferDocumentEdit ? (
+                        <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-400 transition-colors">
+                          <input
+                            type="file"
+                            id="edit-transfer-document"
+                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            onChange={(e) => setTransferDocumentEdit(e.target.files[0] || null)}
+                            className="hidden"
+                          />
+                          <label
+                            htmlFor="edit-transfer-document"
+                            className="cursor-pointer flex flex-col items-center"
+                          >
+                            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center mb-3">
+                              <FaFileUpload className="w-6 h-6 text-blue-600" />
+                            </div>
+                            <p className="text-sm font-medium text-gray-700 mb-1">
+                              Tải lên phiếu bàn giao
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              PDF, DOC, DOCX, JPG, PNG (tối đa 10MB)
+                            </p>
+                          </label>
+                        </div>
+                      ) : (
+                        <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                              <FaUpload className="w-5 h-5 text-white" />
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">
+                                {transferDocumentEdit.name}
+                              </p>
+                              <p className="text-xs text-gray-500">
+                                {(transferDocumentEdit.size / 1024 / 1024).toFixed(2)} MB
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setTransferDocumentEdit(null)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <FaTrashAlt className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 pt-6 border-t border-gray-200 mt-6">
+                <button
+                  type="button"
+                  onClick={handleCloseEditModal}
+                  className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-100 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors"
+                >
+                  Cập nhật
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -27,17 +27,17 @@ const storage = multer.diskStorage({
   }
 });
 
-// Filter: chấp nhận JPG, PNG, PDF
+// Filter: chấp nhận JPG, PNG, PDF, DOC, DOCX
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|pdf/;
+  const allowedTypes = /jpeg|jpg|png|pdf|doc|docx/;
   const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetypes = /image\/jpeg|image\/jpg|image\/png|application\/pdf/;
+  const mimetypes = /image\/jpeg|image\/jpg|image\/png|application\/pdf|application\/msword|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document/;
   const mimetype = mimetypes.test(file.mimetype);
 
   if ((mimetype || extname) && allowedTypes.test(path.extname(file.originalname).toLowerCase())) {
     return cb(null, true);
   } else {
-    cb(new Error('Chỉ chấp nhận file JPG, PNG, PDF'));
+    cb(new Error('Chỉ chấp nhận file JPG, PNG, PDF, DOC, DOCX'));
   }
 };
 

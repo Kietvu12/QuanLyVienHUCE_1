@@ -1,112 +1,104 @@
-import { useState } from 'react';
-import { FaSearch, FaPlus, FaEdit, FaTrash, FaEye, FaLock, FaUnlock, FaUserShield, FaUser, FaUserTie, FaUserCog } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaSearch, FaPlus, FaEdit, FaTrash, FaEye, FaLock, FaUnlock, FaUserShield, FaUser, FaUserTie, FaUserCog, FaTimes } from 'react-icons/fa';
 import React from 'react';
-const accounts = [
-  {
-    id: 'ACC-001',
-    username: 'admin',
-    name: 'Nguyễn Văn A',
-    email: 'admin@example.com',
-    role: 'Quản trị viên',
-    roleCode: 'admin',
-    department: 'Công nghệ thông tin',
-    status: 'Hoạt động',
-    lastLogin: '15/12/2025 14:30',
-    permissions: ['Tất cả quyền'],
-    createdAt: '01/01/2020',
-  },
-  {
-    id: 'ACC-002',
-    username: 'manager01',
-    name: 'Trần Thị B',
-    email: 'manager01@example.com',
-    role: 'Quản lý',
-    roleCode: 'manager',
-    department: 'Xây dựng',
-    status: 'Hoạt động',
-    lastLogin: '15/12/2025 10:15',
-    permissions: ['Xem báo cáo', 'Duyệt báo cáo', 'Quản lý nhân sự'],
-    createdAt: '15/03/2021',
-  },
-  {
-    id: 'ACC-003',
-    username: 'user001',
-    name: 'Lê Văn C',
-    email: 'user001@example.com',
-    role: 'Người dùng',
-    roleCode: 'user',
-    department: 'Kỹ thuật',
-    status: 'Hoạt động',
-    lastLogin: '14/12/2025 16:45',
-    permissions: ['Xem báo cáo', 'Tạo báo cáo'],
-    createdAt: '10/06/2019',
-  },
-  {
-    id: 'ACC-004',
-    username: 'user002',
-    name: 'Phạm Thị D',
-    email: 'user002@example.com',
-    role: 'Người dùng',
-    roleCode: 'user',
-    department: 'Công nghệ thông tin',
-    status: 'Khóa',
-    lastLogin: '10/12/2025 09:20',
-    permissions: ['Xem báo cáo'],
-    createdAt: '05/09/2022',
-  },
-  {
-    id: 'ACC-005',
-    username: 'manager02',
-    name: 'Hoàng Văn E',
-    email: 'manager02@example.com',
-    role: 'Quản lý',
-    roleCode: 'manager',
-    department: 'Hành chính',
-    status: 'Hoạt động',
-    lastLogin: '15/12/2025 11:30',
-    permissions: ['Xem báo cáo', 'Duyệt báo cáo', 'Quản lý tài sản'],
-    createdAt: '12/11/2020',
-  },
-  {
-    id: 'ACC-006',
-    username: 'user003',
-    name: 'Nguyễn Thị F',
-    email: 'user003@example.com',
-    role: 'Người dùng',
-    roleCode: 'user',
-    department: 'Xây dựng',
-    status: 'Hoạt động',
-    lastLogin: '13/12/2025 14:00',
-    permissions: ['Xem báo cáo', 'Tạo báo cáo', 'Quản lý đề tài'],
-    createdAt: '15/04/2021',
-  },
-];
+import { useAuth } from '../../context/AuthContext';
+import { authAPI } from '../../services/api';
 
+const getRoleDisplayName = (roleCode) => {
+  const roleMap = {
+    'vien_truong': 'Viện trưởng',
+    'hieu_truong': 'Hiệu trưởng',
+    'cap_phong': 'Cấp phòng',
+    'ke_toan_vien': 'Kế toán viên',
+  };
+  return roleMap[roleCode] || roleCode;
+};
+
+// Mapping từ ten_quyen sang id_quyen (cần lấy từ database, tạm thời hardcode)
+// TODO: Tạo API để lấy danh sách quyền từ database
 const roles = [
-  { code: 'admin', name: 'Quản trị viên', icon: FaUserShield, color: 'bg-red-500' },
-  { code: 'manager', name: 'Quản lý', icon: FaUserTie, color: 'bg-blue-500' },
-  { code: 'user', name: 'Người dùng', icon: FaUser, color: 'bg-green-500' },
-  { code: 'viewer', name: 'Người xem', icon: FaUserCog, color: 'bg-gray-500' },
+  { code: 'hieu_truong', name: 'Hiệu trưởng', icon: FaUserShield, color: 'bg-red-500', id_quyen: 1 },
+  { code: 'vien_truong', name: 'Viện trưởng', icon: FaUserTie, color: 'bg-blue-500', id_quyen: 2 },
+  { code: 'cap_phong', name: 'Cấp phòng', icon: FaUser, color: 'bg-green-500', id_quyen: 3 },
+  { code: 'ke_toan_vien', name: 'Kế toán viên', icon: FaUserCog, color: 'bg-gray-500', id_quyen: 4 },
 ];
 
-const allPermissions = [
-  'Tất cả quyền',
-  'Xem báo cáo',
-  'Tạo báo cáo',
-  'Duyệt báo cáo',
-  'Quản lý nhân sự',
-  'Quản lý tài sản',
-  'Quản lý đề tài',
-  'Quản lý doanh thu',
-  'Quản lý tài khoản',
-  'Xuất dữ liệu',
-];
+const getQuyenIdByCode = (code) => {
+  const role = roles.find(r => r.code === code);
+  return role?.id_quyen || '';
+};
 
 const AccountManager = () => {
+  const { user } = useAuth();
+  const [accounts, setAccounts] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [selectedAccount, setSelectedAccount] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [showPermissions, setShowPermissions] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedRole, setSelectedRole] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    totalPages: 0,
+  });
+  const [formData, setFormData] = useState({
+    username: '',
+    ho_ten: '',
+    email: '',
+    id_quyen: '',
+    id_vien: '',
+    trang_thai: 1,
+    password: '',
+  });
+
+  useEffect(() => {
+    if (user?.id_vien) {
+      fetchAccounts();
+    }
+  }, [user?.id_vien, pagination.page, searchTerm, selectedRole, selectedStatus]);
+
+  const fetchAccounts = async () => {
+    try {
+      setLoading(true);
+      const params = {
+        page: pagination.page,
+        limit: pagination.limit,
+      };
+      if (user?.id_vien) {
+        // Backend sẽ tự động filter theo id_vien của user
+      }
+      if (searchTerm) {
+        params.search = searchTerm;
+      }
+      if (selectedRole) {
+        params.id_quyen = selectedRole;
+      }
+      if (selectedStatus) {
+        params.trang_thai = selectedStatus === 'active' ? 1 : 0;
+      }
+
+      const response = await authAPI.getAllAccounts(params);
+      if (response.success) {
+        setAccounts(response.data || []);
+        if (response.pagination) {
+          setPagination(prev => ({
+            ...prev,
+            total: response.pagination.total,
+            totalPages: response.pagination.totalPages,
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy danh sách tài khoản:', error);
+      alert('Có lỗi xảy ra khi lấy danh sách tài khoản');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const getRoleIcon = (roleCode) => {
     const role = roles.find((r) => r.code === roleCode);
@@ -118,13 +110,18 @@ const AccountManager = () => {
     return role ? role.color : 'bg-gray-500';
   };
 
-  const getStatusColor = (status) => {
-    return status === 'Hoạt động'
+  const getStatusColor = (trang_thai) => {
+    return trang_thai === 1
       ? 'bg-emerald-100 text-emerald-800'
       : 'bg-red-100 text-red-800';
   };
 
+  const getStatusLabel = (trang_thai) => {
+    return trang_thai === 1 ? 'Hoạt động' : 'Khóa';
+  };
+
   const getInitials = (name) => {
+    if (!name) return 'U';
     return name
       .split(' ')
       .map((n) => n[0])
@@ -133,31 +130,126 @@ const AccountManager = () => {
       .slice(-2);
   };
 
+  const formatDate = (dateString) => {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN');
+  };
+
   const handleEdit = (account) => {
     setSelectedAccount(account);
+    setFormData({
+      username: account.username || '',
+      ho_ten: account.ho_ten || '',
+      email: account.email || '',
+      id_quyen: account.id_quyen || '',
+      id_vien: account.id_vien || user?.id_vien || '',
+      trang_thai: account.trang_thai !== undefined ? account.trang_thai : 1,
+      password: '',
+    });
     setIsEditing(true);
     setIsCreating(false);
   };
 
   const handleCreate = () => {
-    setSelectedAccount({
-      id: '',
+    setSelectedAccount(null);
+    setFormData({
       username: '',
-      name: '',
+      ho_ten: '',
       email: '',
-      role: 'Người dùng',
-      roleCode: 'user',
-      department: '',
-      status: 'Hoạt động',
-      permissions: [],
+      id_quyen: '',
+      id_vien: user?.id_vien || '',
+      trang_thai: 1,
+      password: '',
     });
     setIsCreating(true);
     setIsEditing(false);
   };
 
-  const handleToggleStatus = (accountId) => {
-    // Aquí se haría la llamada a la API
-    console.log('Toggle status for:', accountId);
+  const handleToggleStatus = async (accountId) => {
+    try {
+      const response = await authAPI.toggleAccountStatus(accountId);
+      if (response.success) {
+        alert(response.message || 'Thay đổi trạng thái thành công!');
+        fetchAccounts();
+      } else {
+        alert(response.message || 'Có lỗi xảy ra');
+      }
+    } catch (error) {
+      console.error('Lỗi khi thay đổi trạng thái:', error);
+      alert('Có lỗi xảy ra khi thay đổi trạng thái');
+    }
+  };
+
+  const handleDelete = async (accountId) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa tài khoản này?')) {
+      return;
+    }
+    try {
+      const response = await authAPI.deleteAccount(accountId);
+      if (response.success) {
+        alert('Xóa tài khoản thành công!');
+        fetchAccounts();
+      } else {
+        alert(response.message || 'Có lỗi xảy ra');
+      }
+    } catch (error) {
+      console.error('Lỗi khi xóa tài khoản:', error);
+      alert('Có lỗi xảy ra khi xóa tài khoản');
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      if (isCreating) {
+        // Tạo mới
+        const response = await authAPI.register({
+          username: formData.username,
+          password: formData.password,
+          email: formData.email,
+          ho_ten: formData.ho_ten,
+          id_quyen: formData.id_quyen,
+          id_vien: formData.id_vien || null,
+        });
+        if (response.success) {
+          alert('Tạo tài khoản thành công!');
+          setIsCreating(false);
+          setFormData({
+            username: '',
+            ho_ten: '',
+            email: '',
+            id_quyen: '',
+            id_vien: user?.id_vien || '',
+            trang_thai: 1,
+            password: '',
+          });
+          fetchAccounts();
+        } else {
+          alert(response.message || 'Có lỗi xảy ra');
+        }
+      } else if (isEditing && selectedAccount) {
+        // Cập nhật
+        const response = await authAPI.updateAccount(selectedAccount.id, {
+          ho_ten: formData.ho_ten,
+          email: formData.email,
+          id_quyen: formData.id_quyen,
+          id_vien: formData.id_vien || null,
+          trang_thai: formData.trang_thai,
+        });
+        if (response.success) {
+          alert('Cập nhật tài khoản thành công!');
+          setIsEditing(false);
+          setSelectedAccount(null);
+          fetchAccounts();
+        } else {
+          alert(response.message || 'Có lỗi xảy ra');
+        }
+      }
+    } catch (error) {
+      console.error('Lỗi khi lưu tài khoản:', error);
+      alert('Có lỗi xảy ra khi lưu tài khoản');
+    }
   };
 
   return (
@@ -188,28 +280,41 @@ const AccountManager = () => {
               <input
                 type="text"
                 placeholder="Tìm kiếm tên, email, username..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setPagination(prev => ({ ...prev, page: 1 }));
+                }}
                 className="w-full h-9 pl-10 pr-4 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
           </div>
-          <select className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <select 
+            value={selectedRole}
+            onChange={(e) => {
+              setSelectedRole(e.target.value);
+              setPagination(prev => ({ ...prev, page: 1 }));
+            }}
+            className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
             <option value="">Tất cả vai trò</option>
-            <option value="admin">Quản trị viên</option>
-            <option value="manager">Quản lý</option>
-            <option value="user">Người dùng</option>
-            <option value="viewer">Người xem</option>
+            {roles.map((role) => (
+              <option key={role.code} value={role.code}>
+                {role.name}
+              </option>
+            ))}
           </select>
-          <select className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+          <select 
+            value={selectedStatus}
+            onChange={(e) => {
+              setSelectedStatus(e.target.value);
+              setPagination(prev => ({ ...prev, page: 1 }));
+            }}
+            className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
             <option value="">Tất cả trạng thái</option>
-            <option value="active">Hoạt động</option>
-            <option value="locked">Khóa</option>
-          </select>
-          <select className="h-9 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-            <option value="">Tất cả phòng ban</option>
-            <option value="it">Công nghệ thông tin</option>
-            <option value="construction">Xây dựng</option>
-            <option value="engineering">Kỹ thuật</option>
-            <option value="admin">Hành chính</option>
+            <option value="1">Hoạt động</option>
+            <option value="0">Khóa</option>
           </select>
         </div>
 
@@ -245,134 +350,142 @@ const AccountManager = () => {
               </tr>
             </thead>
             <tbody>
-              {accounts.map((account) => {
-                const RoleIcon = getRoleIcon(account.roleCode);
-                return (
-                  <tr key={account.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm`}>
-                          {getInitials(account.name)}
+              {loading ? (
+                <tr>
+                  <td colSpan="8" className="py-8 text-center text-gray-500">
+                    Đang tải...
+                  </td>
+                </tr>
+              ) : accounts.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="py-8 text-center text-gray-500">
+                    Không có tài khoản nào
+                  </td>
+                </tr>
+              ) : (
+                accounts.map((account) => {
+                  const RoleIcon = getRoleIcon(account.quyen?.ten_quyen);
+                  return (
+                    <tr key={account.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center text-white font-semibold text-sm`}>
+                            {getInitials(account.ho_ten || account.username)}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{account.ho_ten || account.username}</p>
+                            <p className="text-xs text-gray-500">TK-{account.id}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{account.name}</p>
-                          <p className="text-xs text-gray-500">{account.id}</p>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-700">{account.username}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-700">{account.email || '-'}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-2">
+                          <div className={`w-8 h-8 rounded-lg ${getRoleColor(account.quyen?.ten_quyen)} flex items-center justify-center text-white`}>
+                            <RoleIcon className="w-4 h-4" />
+                          </div>
+                          <span className="text-sm text-gray-700">{getRoleDisplayName(account.quyen?.ten_quyen)}</span>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-700">{account.username}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-700">{account.email}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-lg ${getRoleColor(account.roleCode)} flex items-center justify-center text-white`}>
-                          <RoleIcon className="w-4 h-4" />
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-700">{account.vien?.ten_vien || '-'}</span>
+                      </td>
+                      <td className="py-4 px-4 text-center">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(account.trang_thai)}`}>
+                          {getStatusLabel(account.trang_thai)}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-sm text-gray-700">{formatDate(account.updated_at)}</span>
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => handleEdit(account)}
+                            className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                            title="Chỉnh sửa"
+                          >
+                            <FaEdit className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleToggleStatus(account.id)}
+                            className={`p-1.5 rounded transition-colors ${
+                              account.trang_thai === 1
+                                ? 'text-yellow-600 hover:bg-yellow-50'
+                                : 'text-emerald-600 hover:bg-emerald-50'
+                            }`}
+                            title={account.trang_thai === 1 ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
+                          >
+                            {account.trang_thai === 1 ? (
+                              <FaLock className="w-4 h-4" />
+                            ) : (
+                              <FaUnlock className="w-4 h-4" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(account.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Xóa"
+                          >
+                            <FaTrash className="w-4 h-4" />
+                          </button>
                         </div>
-                        <span className="text-sm text-gray-700">{account.role}</span>
-                      </div>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-700">{account.department}</span>
-                    </td>
-                    <td className="py-4 px-4 text-center">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(account.status)}`}>
-                        {account.status}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span className="text-sm text-gray-700">{account.lastLogin}</span>
-                    </td>
-                    <td className="py-4 px-4">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => setShowPermissions(showPermissions === account.id ? null : account.id)}
-                          className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                          title="Xem quyền"
-                        >
-                          <FaEye className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleEdit(account)}
-                          className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
-                          title="Chỉnh sửa"
-                        >
-                          <FaEdit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleToggleStatus(account.id)}
-                          className={`p-1.5 rounded transition-colors ${
-                            account.status === 'Hoạt động'
-                              ? 'text-yellow-600 hover:bg-yellow-50'
-                              : 'text-emerald-600 hover:bg-emerald-50'
-                          }`}
-                          title={account.status === 'Hoạt động' ? 'Khóa tài khoản' : 'Mở khóa tài khoản'}
-                        >
-                          {account.status === 'Hoạt động' ? (
-                            <FaLock className="w-4 h-4" />
-                          ) : (
-                            <FaUnlock className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
-                          title="Xóa"
-                        >
-                          <FaTrash className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>
 
-        {/* Hiển thị quyền khi click vào icon mắt */}
-        {showPermissions && (
-          <div className="mt-4 p-4 rounded-lg bg-blue-50 border border-blue-200">
-            <h3 className="text-sm font-semibold text-blue-900 mb-2">
-              Quyền của {accounts.find((a) => a.id === showPermissions)?.name}:
-            </h3>
-            <div className="flex flex-wrap gap-2">
-              {accounts
-                .find((a) => a.id === showPermissions)
-                ?.permissions.map((permission, index) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {permission}
-                  </span>
-                ))}
-            </div>
-          </div>
-        )}
-
-        {/* Paginación */}
+        {/* Pagination */}
         <div className="mt-4 flex items-center justify-between">
           <p className="text-sm text-gray-600">
-            Hiển thị 1-6 của {accounts.length} kết quả
+            Hiển thị {(pagination.page - 1) * pagination.limit + 1}-{Math.min(pagination.page * pagination.limit, pagination.total)} của {pagination.total} kết quả
           </p>
           <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            <button 
+              onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+              disabled={pagination.page === 1}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Trước
             </button>
-            <button className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-sm font-medium">
-              1
-            </button>
-            <button className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
+              const pageNum = i + 1;
+              return (
+                <button
+                  key={pageNum}
+                  onClick={() => setPagination(prev => ({ ...prev, page: pageNum }))}
+                  className={`px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors ${
+                    pagination.page === pageNum
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              );
+            })}
+            <button 
+              onClick={() => setPagination(prev => ({ ...prev, page: Math.min(prev.totalPages, prev.page + 1) }))}
+              disabled={pagination.page >= pagination.totalPages}
+              className="px-3 py-1.5 rounded-lg border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Sau
             </button>
           </div>
         </div>
       </div>
 
-      {/* Modal/Form para crear/editar */}
-      {(isEditing || isCreating) && selectedAccount && (
+      {/* Modal/Form để tạo/sửa */}
+      {(isEditing || isCreating) && (
         <div className="rounded-2xl bg-white shadow-sm px-6 py-5">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold text-gray-900">
@@ -383,153 +496,143 @@ const AccountManager = () => {
                 setIsEditing(false);
                 setIsCreating(false);
                 setSelectedAccount(null);
+                setFormData({
+                  username: '',
+                  ho_ten: '',
+                  email: '',
+                  id_quyen: '',
+                  id_vien: user?.id_vien || '',
+                  trang_thai: 1,
+                  password: '',
+                });
               }}
               className="text-gray-400 hover:text-gray-600"
             >
-              ✕
+              <FaTimes className="w-5 h-5" />
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Username *
-              </label>
-              <input
-                type="text"
-                defaultValue={selectedAccount.username}
-                className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                disabled={isEditing}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Họ và tên *
-              </label>
-              <input
-                type="text"
-                defaultValue={selectedAccount.name}
-                className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email *
-              </label>
-              <input
-                type="email"
-                defaultValue={selectedAccount.email}
-                className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Vai trò *
-              </label>
-              <select
-                defaultValue={selectedAccount.roleCode}
-                className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                {roles.map((role) => (
-                  <option key={role.code} value={role.code}>
-                    {role.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Phòng ban
-              </label>
-              <select
-                defaultValue={selectedAccount.department}
-                className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">Chọn phòng ban</option>
-                <option value="Công nghệ thông tin">Công nghệ thông tin</option>
-                <option value="Xây dựng">Xây dựng</option>
-                <option value="Kỹ thuật">Kỹ thuật</option>
-                <option value="Hành chính">Hành chính</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Trạng thái
-              </label>
-              <select
-                defaultValue={selectedAccount.status === 'Hoạt động' ? 'active' : 'locked'}
-                className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="active">Hoạt động</option>
-                <option value="locked">Khóa</option>
-              </select>
-            </div>
-
-            {isCreating && (
+          <form onSubmit={handleSubmit}>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Mật khẩu *
+                  Username *
                 </label>
                 <input
-                  type="password"
+                  type="text"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="Nhập mật khẩu"
+                  disabled={isEditing}
+                  required
                 />
               </div>
-            )}
-          </div>
 
-          {/* Quyền */}
-          <div className="mt-6">
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Phân quyền
-            </label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {allPermissions.map((permission) => (
-                <label key={permission} className="flex items-center gap-2 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    defaultChecked={
-                      selectedAccount.permissions.includes(permission) ||
-                      selectedAccount.permissions.includes('Tất cả quyền')
-                    }
-                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm text-gray-700">{permission}</span>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Họ và tên *
                 </label>
-              ))}
-            </div>
-          </div>
+                <input
+                  type="text"
+                  value={formData.ho_ten}
+                  onChange={(e) => setFormData({ ...formData, ho_ten: e.target.value })}
+                  className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                />
+              </div>
 
-          {/* Botones */}
-          <div className="mt-6 flex items-center gap-3 justify-end">
-            <button
-              onClick={() => {
-                setIsEditing(false);
-                setIsCreating(false);
-                setSelectedAccount(null);
-              }}
-              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
-            >
-              Hủy
-            </button>
-            <button
-              onClick={() => {
-                // Aquí se haría la llamada a la API
-                setIsEditing(false);
-                setIsCreating(false);
-                setSelectedAccount(null);
-              }}
-              className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors"
-            >
-              {isCreating ? 'Tạo tài khoản' : 'Lưu thay đổi'}
-            </button>
-          </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Vai trò *
+                </label>
+                <select
+                  value={formData.id_quyen}
+                  onChange={(e) => setFormData({ ...formData, id_quyen: parseInt(e.target.value) })}
+                  className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                >
+                  <option value="">Chọn vai trò</option>
+                  {roles.map((role) => (
+                    <option key={role.code} value={role.id_quyen}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Trạng thái
+                </label>
+                <select
+                  value={formData.trang_thai}
+                  onChange={(e) => setFormData({ ...formData, trang_thai: parseInt(e.target.value) })}
+                  className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value={1}>Hoạt động</option>
+                  <option value={0}>Khóa</option>
+                </select>
+              </div>
+
+              {isCreating && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Mật khẩu *
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Nhập mật khẩu"
+                    required={isCreating}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Buttons */}
+            <div className="mt-6 flex items-center gap-3 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditing(false);
+                  setIsCreating(false);
+                  setSelectedAccount(null);
+                  setFormData({
+                    username: '',
+                    ho_ten: '',
+                    email: '',
+                    id_quyen: '',
+                    id_vien: user?.id_vien || '',
+                    trang_thai: 1,
+                    password: '',
+                  });
+                }}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 rounded-lg bg-blue-500 text-white text-sm font-medium hover:bg-blue-600 transition-colors"
+              >
+                {isCreating ? 'Tạo tài khoản' : 'Lưu thay đổi'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
     </div>

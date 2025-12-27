@@ -91,6 +91,35 @@ export const authAPI = {
     });
     return response;
   },
+
+  // Quản lý tài khoản
+  getAllAccounts: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await apiRequest(`/auth/accounts?${queryString}`);
+    return response;
+  },
+
+  updateAccount: async (id, accountData) => {
+    const response = await apiRequest(`/auth/accounts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(accountData),
+    });
+    return response;
+  },
+
+  deleteAccount: async (id) => {
+    const response = await apiRequest(`/auth/accounts/${id}`, {
+      method: 'DELETE',
+    });
+    return response;
+  },
+
+  toggleAccountStatus: async (id) => {
+    const response = await apiRequest(`/auth/accounts/${id}/toggle-status`, {
+      method: 'PUT',
+    });
+    return response;
+  },
 };
 
 // ==================== NHAN SU API ====================
@@ -451,10 +480,10 @@ export const baoCaoAPI = {
     return response;
   },
 
-  tuChoi: async (id, id_nguoi_phe_duyet) => {
+  tuChoi: async (id, id_nguoi_phe_duyet, ly_do_tu_choi) => {
     const response = await apiRequest(`/bao-cao/${id}/tu-choi`, {
       method: 'POST',
-      body: JSON.stringify({ id_nguoi_phe_duyet }),
+      body: JSON.stringify({ id_nguoi_phe_duyet, ly_do_tu_choi }),
     });
     return response;
   },
@@ -1003,6 +1032,42 @@ export const xeStatisticsAPI = {
   },
 };
 
+// ==================== THONG BAO API ====================
+
+export const thongBaoAPI = {
+  getAll: async (params = {}) => {
+    const queryString = new URLSearchParams(params).toString();
+    const response = await apiRequest(`/thong-bao${queryString ? `?${queryString}` : ''}`);
+    return response;
+  },
+
+  getUnreadCount: async () => {
+    const response = await apiRequest('/thong-bao/unread-count');
+    return response;
+  },
+
+  markAsRead: async (id) => {
+    const response = await apiRequest(`/thong-bao/${id}/read`, {
+      method: 'PUT',
+    });
+    return response;
+  },
+
+  markAllAsRead: async () => {
+    const response = await apiRequest('/thong-bao/mark-all-read', {
+      method: 'PUT',
+    });
+    return response;
+  },
+
+  delete: async (id) => {
+    const response = await apiRequest(`/thong-bao/${id}`, {
+      method: 'DELETE',
+    });
+    return response;
+  },
+};
+
 // Export default API object
 export default {
   auth: authAPI,
@@ -1024,5 +1089,6 @@ export default {
   nhanSuStatistics: nhanSuStatisticsAPI,
   hopDongStatistics: hopDongStatisticsAPI,
   xeStatistics: xeStatisticsAPI,
+  thongBao: thongBaoAPI,
 };
 

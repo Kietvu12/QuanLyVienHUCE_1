@@ -1,5 +1,6 @@
 const db = require('../models');
 const { Op } = require('sequelize');
+const { sendDataUpdateNotification } = require('../utils/notificationHelper');
 
 // Lấy tất cả tài sản (có thể filter theo id_vien, id_phong, tinh_trang)
 const getAllTaiSan = async (req, res) => {
@@ -117,7 +118,8 @@ const createTaiSan = async (req, res) => {
       ten_tai_san,
       tinh_trang,
       ngay_nhan_tai_san,
-      ngay_ban_giao_tai_san
+      ngay_ban_giao_tai_san,
+      gia_tri
     } = req.body;
 
     // Kiểm tra viện tồn tại
@@ -146,7 +148,8 @@ const createTaiSan = async (req, res) => {
       ten_tai_san,
       tinh_trang: tinh_trang || 'tot',
       ngay_nhan_tai_san: ngay_nhan_tai_san || null,
-      ngay_ban_giao_tai_san: ngay_ban_giao_tai_san || null
+      ngay_ban_giao_tai_san: ngay_ban_giao_tai_san || null,
+      gia_tri: gia_tri ? parseFloat(gia_tri) : null
     });
 
     const taiSanWithRelations = await db.TaiSan.findByPk(taiSan.id, {
@@ -164,6 +167,20 @@ const createTaiSan = async (req, res) => {
         }
       ]
     });
+
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user) {
+      await sendDataUpdateNotification(
+        io,
+        id_vien,
+        req.user.id,
+        'tai_san',
+        taiSan.id,
+        ten_tai_san,
+        'them_moi'
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -190,7 +207,8 @@ const updateTaiSan = async (req, res) => {
       ten_tai_san,
       tinh_trang,
       ngay_nhan_tai_san,
-      ngay_ban_giao_tai_san
+      ngay_ban_giao_tai_san,
+      gia_tri
     } = req.body;
 
     const taiSan = await db.TaiSan.findByPk(id);
@@ -231,7 +249,8 @@ const updateTaiSan = async (req, res) => {
       ten_tai_san: ten_tai_san !== undefined ? ten_tai_san : taiSan.ten_tai_san,
       tinh_trang: tinh_trang !== undefined ? tinh_trang : taiSan.tinh_trang,
       ngay_nhan_tai_san: ngay_nhan_tai_san !== undefined ? ngay_nhan_tai_san : taiSan.ngay_nhan_tai_san,
-      ngay_ban_giao_tai_san: ngay_ban_giao_tai_san !== undefined ? ngay_ban_giao_tai_san : taiSan.ngay_ban_giao_tai_san
+      ngay_ban_giao_tai_san: ngay_ban_giao_tai_san !== undefined ? ngay_ban_giao_tai_san : taiSan.ngay_ban_giao_tai_san,
+      gia_tri: gia_tri !== undefined ? (gia_tri ? parseFloat(gia_tri) : null) : taiSan.gia_tri
     });
 
     const updatedTaiSan = await db.TaiSan.findByPk(id, {
@@ -249,6 +268,20 @@ const updateTaiSan = async (req, res) => {
         }
       ]
     });
+
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user) {
+      await sendDataUpdateNotification(
+        io,
+        updatedTaiSan.id_vien,
+        req.user.id,
+        'tai_san',
+        updatedTaiSan.id,
+        updatedTaiSan.ten_tai_san,
+        'cap_nhat'
+      );
+    }
 
     res.json({
       success: true,
@@ -278,7 +311,24 @@ const deleteTaiSan = async (req, res) => {
       });
     }
 
+    const tenTaiSan = taiSan.ten_tai_san;
+    const idVien = taiSan.id_vien;
+
     await taiSan.destroy();
+
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user) {
+      await sendDataUpdateNotification(
+        io,
+        idVien,
+        req.user.id,
+        'tai_san',
+        id,
+        tenTaiSan,
+        'xoa'
+      );
+    }
 
     res.json({
       success: true,
@@ -313,21 +363,34 @@ const getTaiSanStatistics = async (req, res) => {
       }
     });
 
-    // Thiết bị đang sử dụng
+    // Thiết bị đang sử dụng (tinh_trang = 'tot')
     const dangSuDung = await db.TaiSan.count({
       where: {
         ...where,
-        tinh_trang: 'dang_su_dung'
+        tinh_trang: 'tot'
       }
     });
 
-    // Thiết bị bảo trì
+    // Thiết bị cần bảo trì (tinh_trang = 'can_bao_tri')
     const baoTri = await db.TaiSan.count({
       where: {
         ...where,
-        tinh_trang: 'bao_tri'
+        tinh_trang: 'can_bao_tri'
       }
     });
+
+    // Tổng giá trị tài sản (sum của gia_tri)
+    const tongGiaTriResult = await db.TaiSan.findAll({
+      where: {
+        ...where,
+        gia_tri: { [Op.ne]: null }
+      },
+      attributes: [
+        [db.Sequelize.fn('SUM', db.Sequelize.col('gia_tri')), 'tong_gia_tri']
+      ],
+      raw: true
+    });
+    const tongGiaTri = parseFloat(tongGiaTriResult[0]?.tong_gia_tri) || 0;
 
     res.json({
       success: true,
@@ -335,7 +398,8 @@ const getTaiSanStatistics = async (req, res) => {
         tong_tai_san: tongTaiSan,
         thiet_bi_hong: thietBiHong,
         dang_su_dung: dangSuDung,
-        bao_tri: baoTri
+        bao_tri: baoTri,
+        tong_gia_tri: tongGiaTri
       }
     });
   } catch (error) {
@@ -354,6 +418,7 @@ const uploadMediaTaiSan = async (req, res) => {
     const { id } = req.params;
     const anh_phieu_nhan = req.files?.anh_phieu_nhan?.[0];
     const anh_tai_san = req.files?.anh_tai_san?.[0];
+    const anh_phieu_ban_giao = req.files?.anh_phieu_ban_giao?.[0];
 
     // Kiểm tra tài sản tồn tại
     const taiSan = await db.TaiSan.findByPk(id);
@@ -375,6 +440,9 @@ const uploadMediaTaiSan = async (req, res) => {
     }
     if (anh_tai_san) {
       mediaData.anh_tai_san = `/uploads/media-tai-san/${anh_tai_san.filename}`;
+    }
+    if (anh_phieu_ban_giao) {
+      mediaData.anh_phieu_ban_giao = `/uploads/media-tai-san/${anh_phieu_ban_giao.filename}`;
     }
 
     if (mediaTaiSan) {

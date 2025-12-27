@@ -2,6 +2,7 @@ import { useState } from 'react';
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { NotificationProvider } from './context/NotificationContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -17,6 +18,7 @@ import RectorPersonnel from './page/rector/Personnel';
 import RectorAsset from './page/rector/Asset';
 import RectorReport from './page/rector/Report';
 import RectorCreateReport from './page/rector/CreateReport';
+import RectorEditReport from './page/rector/EditReport';
 
 // Principal pages
 import PrincipalDashboard from './page/principal/Dashboard';
@@ -104,6 +106,7 @@ const AppRoutes = () => {
                     <Route path="/asset" element={<RectorAsset />} />
                     <Route path="/report" element={<RectorReport />} />
                     <Route path="/report/create" element={<RectorCreateReport />} />
+                    <Route path="/report/edit/:id" element={<RectorEditReport />} />
                   </Routes>
                 </div>
               </main>
@@ -184,6 +187,7 @@ const AppRoutes = () => {
                     <Route path="/personnel" element={<AccountantPersonnel />} />
                     <Route path="/asset" element={<AccountantAsset />} />
                     <Route path="/report/create" element={<RectorCreateReport />} />
+                    <Route path="/report/edit/:id" element={<RectorEditReport />} />
                     <Route path="/report" element={<AccountantReport />} />
                     <Route path="/invoice" element={<AccountantInvoice />} />
                     <Route path="/profile" element={<AccountantProfile />} />
@@ -208,7 +212,9 @@ function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <NotificationProvider>
+          <AppRoutes />
+        </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
   );

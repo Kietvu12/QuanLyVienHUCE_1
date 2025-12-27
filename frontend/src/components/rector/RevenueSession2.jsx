@@ -105,12 +105,15 @@ const RevenueSession2 = () => {
       // Format dữ liệu tháng
       const monthNames = ['Tháng 1', 'Tháng 2', 'Tháng 3', 'Tháng 4', 'Tháng 5', 'Tháng 6', 
                           'Tháng 7', 'Tháng 8', 'Tháng 9', 'Tháng 10', 'Tháng 11', 'Tháng 12'];
-      const formattedMonthlyData = Object.keys(monthlyStats).map((month, index) => ({
-        month: `T${parseInt(month)}`,
-        fullMonth: monthNames[index],
-        thu: monthlyStats[month].thu,
-        chi: monthlyStats[month].chi
-      }));
+      const formattedMonthlyData = Object.keys(monthlyStats).map((month) => {
+        const monthIndex = parseInt(month) - 1; // Chuyển từ 1-12 sang 0-11
+        return {
+          month: `T${parseInt(month)}`,
+          fullMonth: monthNames[monthIndex],
+          thu: monthlyStats[month].thu,
+          chi: monthlyStats[month].chi
+        };
+      });
 
       setMonthlyData(formattedMonthlyData);
 

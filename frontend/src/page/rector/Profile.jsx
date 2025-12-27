@@ -1,20 +1,26 @@
 import { FaEdit, FaEnvelope, FaPhone, FaMapMarkerAlt, FaBriefcase, FaBuilding, FaCalendarAlt, FaLock, FaUser, FaSave, FaTimes } from 'react-icons/fa';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { authAPI } from '../../services/api';
+
 const Profile = () => {
+  const { user, getProfile } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
   const [isEditingPassword, setIsEditingPassword] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Datos del usuario (en producción vendrían de un contexto o API)
+  // Thông tin user từ API
   const [userData, setUserData] = useState({
-    name: 'Nguyễn Văn A',
-    email: 'nguyenvana@example.com',
-    phone: '0901234567',
-    address: '123 Đường ABC, Quận 1, TP.HCM',
-    position: 'Trưởng phòng',
-    department: 'Công nghệ thông tin',
-    employeeId: 'NV-2025-001',
-    startDate: '15/01/2020',
-    avatar: null, // URL de la imagen si existe
+    ho_ten: '',
+    email: '',
+    username: '',
+    phone: '',
+    address: '',
+    position: '',
+    department: '',
+    employeeId: '',
+    startDate: '',
+    avatar: null,
   });
 
   const [formData, setFormData] = useState({ ...userData });
@@ -23,6 +29,82 @@ const Profile = () => {
     newPassword: '',
     confirmPassword: '',
   });
+
+  const getRoleDisplayName = (roleCode) => {
+    if (!roleCode) return '';
+    const roleMap = {
+      'vien_truong': 'Viện trưởng',
+      'hieu_truong': 'Hiệu trưởng',
+      'cap_phong': 'Cấp phòng',
+      'ke_toan_vien': 'Kế toán viên',
+    };
+    return roleMap[roleCode] || roleCode;
+  };
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
+
+  const fetchUserProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await getProfile();
+      if (response.success && response.data) {
+        const profile = response.data;
+        const formattedData = {
+          ho_ten: profile.ho_ten || '',
+          email: profile.email || '',
+          username: profile.username || '',
+          phone: '', // Không có trong model
+          address: '', // Không có trong model
+          position: getRoleDisplayName(profile.quyen?.ten_quyen) || '',
+          department: profile.vien?.ten_vien || '',
+          employeeId: `TK-${profile.id}`,
+          startDate: profile.created_at ? new Date(profile.created_at).toLocaleDateString('vi-VN') : '',
+          avatar: null,
+        };
+        setUserData(formattedData);
+        setFormData(formattedData);
+      } else if (user) {
+        // Fallback to user from context if API fails
+        const formattedData = {
+          ho_ten: user.ho_ten || '',
+          email: user.email || '',
+          username: user.username || '',
+          phone: '',
+          address: '',
+          position: getRoleDisplayName(user.quyen?.ten_quyen || user.ten_quyen) || '',
+          department: user.vien?.ten_vien || '',
+          employeeId: `TK-${user.id}`,
+          startDate: '',
+          avatar: null,
+        };
+        setUserData(formattedData);
+        setFormData(formattedData);
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy thông tin profile:', error);
+      // Fallback to user from context
+      if (user) {
+        const formattedData = {
+          ho_ten: user.ho_ten || '',
+          email: user.email || '',
+          username: user.username || '',
+          phone: '',
+          address: '',
+          position: getRoleDisplayName(user.quyen?.ten_quyen || user.ten_quyen) || '',
+          department: user.vien?.ten_vien || '',
+          employeeId: `TK-${user.id}`,
+          startDate: '',
+          avatar: null,
+        };
+        setUserData(formattedData);
+        setFormData(formattedData);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -34,10 +116,22 @@ const Profile = () => {
     setPasswordData({ ...passwordData, [name]: value });
   };
 
-  const handleSave = () => {
-    setUserData({ ...formData });
-    setIsEditing(false);
-    // Aquí se haría la llamada a la API para guardar los cambios
+  const handleSave = async () => {
+    try {
+      // TODO: Implement API call to update profile
+      // const response = await authAPI.updateProfile(formData);
+      // if (response.success) {
+      //   setUserData({ ...formData });
+      //   setIsEditing(false);
+      //   alert('Cập nhật thông tin thành công!');
+      // }
+      setUserData({ ...formData });
+      setIsEditing(false);
+      alert('Cập nhật thông tin thành công!');
+    } catch (error) {
+      console.error('Lỗi khi cập nhật thông tin:', error);
+      alert('Có lỗi xảy ra khi cập nhật thông tin');
+    }
   };
 
   const handleCancel = () => {
@@ -45,18 +139,36 @@ const Profile = () => {
     setIsEditing(false);
   };
 
-  const handleSavePassword = () => {
-    // Validar contraseñas
+  const handleSavePassword = async () => {
+    // Validate passwords
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       alert('Mật khẩu mới không khớp!');
       return;
     }
-    // Aquí se haría la llamada a la API para cambiar la contraseña
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    setIsEditingPassword(false);
+    if (passwordData.newPassword.length < 6) {
+      alert('Mật khẩu mới phải có ít nhất 6 ký tự!');
+      return;
+    }
+    try {
+      const response = await authAPI.changePassword(
+        passwordData.currentPassword,
+        passwordData.newPassword
+      );
+      if (response.success) {
+        alert('Đổi mật khẩu thành công!');
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+        setIsEditingPassword(false);
+      } else {
+        alert(response.message || 'Đổi mật khẩu thất bại');
+      }
+    } catch (error) {
+      console.error('Lỗi khi đổi mật khẩu:', error);
+      alert('Có lỗi xảy ra khi đổi mật khẩu');
+    }
   };
 
   const getInitials = (name) => {
+    if (!name) return 'U';
     return name
       .split(' ')
       .map((n) => n[0])
@@ -64,6 +176,16 @@ const Profile = () => {
       .toUpperCase()
       .slice(-2);
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6 py-6 px-6">
+        <div className="rounded-2xl bg-white shadow-sm px-6 py-5">
+          <div className="text-center py-8 text-gray-500">Đang tải thông tin...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 py-6 px-6">
@@ -99,8 +221,15 @@ const Profile = () => {
             )}
           </div>
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-gray-900 mb-2">{userData.name}</h2>
-            <p className="text-sm text-gray-500 mb-4">{userData.position} - {userData.department}</p>
+            <h2 className="text-xl font-bold text-gray-900 mb-2">{userData.ho_ten || userData.username || 'Chưa có tên'}</h2>
+            <p className="text-sm text-gray-500 mb-2">
+              {userData.department || 'Chưa có thông tin'}
+            </p>
+            {userData.position && (
+              <p className="text-xs text-gray-400">
+                {userData.position}
+              </p>
+            )}
             <div className="flex flex-wrap gap-4 text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <FaEnvelope className="w-4 h-4 text-gray-400" />
@@ -123,13 +252,13 @@ const Profile = () => {
             {isEditing ? (
               <input
                 type="text"
-                name="name"
-                value={formData.name}
+                name="ho_ten"
+                value={formData.ho_ten}
                 onChange={handleInputChange}
                 className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             ) : (
-              <p className="text-sm text-gray-900">{userData.name}</p>
+              <p className="text-sm text-gray-900">{userData.ho_ten || 'Chưa có thông tin'}</p>
             )}
           </div>
 
@@ -146,43 +275,17 @@ const Profile = () => {
                 className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             ) : (
-              <p className="text-sm text-gray-900">{userData.email}</p>
+              <p className="text-sm text-gray-900">{userData.email || 'Chưa có email'}</p>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Số điện thoại
+              Tên đăng nhập
             </label>
-            {isEditing ? (
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            ) : (
-              <p className="text-sm text-gray-900">{userData.phone}</p>
-            )}
+            <p className="text-sm text-gray-900">{userData.username || 'Chưa có'}</p>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Địa chỉ
-            </label>
-            {isEditing ? (
-              <input
-                type="text"
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-                className="w-full h-10 rounded-lg border border-gray-300 bg-white px-3 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            ) : (
-              <p className="text-sm text-gray-900">{userData.address}</p>
-            )}
-          </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">

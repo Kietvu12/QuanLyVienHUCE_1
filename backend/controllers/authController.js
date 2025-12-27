@@ -1,4 +1,5 @@
 const db = require('../models');
+const { Op } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -287,10 +288,229 @@ const changePassword = async (req, res) => {
   }
 };
 
+// Lấy danh sách tài khoản (theo viện nếu là viện trưởng)
+const getAllTaiKhoan = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search, id_quyen, trang_thai } = req.query;
+    const offset = (page - 1) * limit;
+
+    const where = {};
+    
+    // Nếu là viện trưởng, chỉ lấy tài khoản của viện đó
+    if (req.user.ten_quyen === 'vien_truong' && req.user.id_vien) {
+      where.id_vien = req.user.id_vien;
+    }
+
+    // Filter theo quyền
+    if (id_quyen) {
+      where.id_quyen = id_quyen;
+    }
+
+    // Filter theo trạng thái
+    if (trang_thai !== undefined) {
+      where.trang_thai = trang_thai === '1' || trang_thai === 1 ? 1 : 0;
+    }
+
+    // Search
+    if (search) {
+      where[Op.or] = [
+        { username: { [Op.like]: `%${search}%` } },
+        { ho_ten: { [Op.like]: `%${search}%` } },
+        { email: { [Op.like]: `%${search}%` } }
+      ];
+    }
+
+    const { count, rows } = await db.TaiKhoan.findAndCountAll({
+      where,
+      include: [
+        {
+          model: db.Quyen,
+          as: 'quyen',
+          attributes: ['id', 'ten_quyen', 'mo_ta']
+        },
+        {
+          model: db.Vien,
+          as: 'vien',
+          attributes: ['id', 'ten_vien'],
+          required: false
+        }
+      ],
+      attributes: { exclude: ['password'] },
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+      order: [['created_at', 'DESC']]
+    });
+
+    res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi khi lấy danh sách tài khoản:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi lấy danh sách tài khoản',
+      error: error.message
+    });
+  }
+};
+
+// Cập nhật tài khoản
+const updateTaiKhoan = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { ho_ten, email, id_quyen, id_vien, trang_thai } = req.body;
+
+    const taiKhoan = await db.TaiKhoan.findByPk(id);
+    if (!taiKhoan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy tài khoản'
+      });
+    }
+
+    // Kiểm tra quyền nếu có thay đổi
+    if (id_quyen) {
+      const quyen = await db.Quyen.findByPk(id_quyen);
+      if (!quyen) {
+        return res.status(400).json({
+          success: false,
+          message: 'Quyền không tồn tại'
+        });
+      }
+    }
+
+    // Kiểm tra viện nếu có thay đổi
+    if (id_vien !== undefined) {
+      if (id_vien) {
+        const vien = await db.Vien.findByPk(id_vien);
+        if (!vien) {
+          return res.status(400).json({
+            success: false,
+            message: 'Viện không tồn tại'
+          });
+        }
+      }
+    }
+
+    await taiKhoan.update({
+      ho_ten: ho_ten !== undefined ? ho_ten : taiKhoan.ho_ten,
+      email: email !== undefined ? email : taiKhoan.email,
+      id_quyen: id_quyen !== undefined ? id_quyen : taiKhoan.id_quyen,
+      id_vien: id_vien !== undefined ? id_vien : taiKhoan.id_vien,
+      trang_thai: trang_thai !== undefined ? trang_thai : taiKhoan.trang_thai
+    });
+
+    const updatedTaiKhoan = await db.TaiKhoan.findByPk(id, {
+      include: [
+        {
+          model: db.Quyen,
+          as: 'quyen',
+          attributes: ['id', 'ten_quyen', 'mo_ta']
+        },
+        {
+          model: db.Vien,
+          as: 'vien',
+          attributes: ['id', 'ten_vien'],
+          required: false
+        }
+      ],
+      attributes: { exclude: ['password'] }
+    });
+
+    res.json({
+      success: true,
+      message: 'Cập nhật tài khoản thành công',
+      data: updatedTaiKhoan
+    });
+  } catch (error) {
+    console.error('Lỗi khi cập nhật tài khoản:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi cập nhật tài khoản',
+      error: error.message
+    });
+  }
+};
+
+// Xóa tài khoản
+const deleteTaiKhoan = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const taiKhoan = await db.TaiKhoan.findByPk(id);
+    if (!taiKhoan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy tài khoản'
+      });
+    }
+
+    await taiKhoan.destroy();
+
+    res.json({
+      success: true,
+      message: 'Xóa tài khoản thành công'
+    });
+  } catch (error) {
+    console.error('Lỗi khi xóa tài khoản:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi xóa tài khoản',
+      error: error.message
+    });
+  }
+};
+
+// Toggle trạng thái tài khoản
+const toggleTaiKhoanStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const taiKhoan = await db.TaiKhoan.findByPk(id);
+    if (!taiKhoan) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy tài khoản'
+      });
+    }
+
+    await taiKhoan.update({
+      trang_thai: taiKhoan.trang_thai === 1 ? 0 : 1
+    });
+
+    res.json({
+      success: true,
+      message: taiKhoan.trang_thai === 1 ? 'Khóa tài khoản thành công' : 'Mở khóa tài khoản thành công',
+      data: {
+        id: taiKhoan.id,
+        trang_thai: taiKhoan.trang_thai === 1 ? 0 : 1
+      }
+    });
+  } catch (error) {
+    console.error('Lỗi khi thay đổi trạng thái tài khoản:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi thay đổi trạng thái tài khoản',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   getProfile,
-  changePassword
+  changePassword,
+  getAllTaiKhoan,
+  updateTaiKhoan,
+  deleteTaiKhoan,
+  toggleTaiKhoanStatus
 };
 

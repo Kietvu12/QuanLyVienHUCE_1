@@ -1,12 +1,20 @@
 const express = require('express');
 const cors = require('cors');
+const http = require('http');
 require('dotenv').config();
 
 const db = require('./models');
 const sequelize = require('./config/database');
+const { initializeSocket } = require('./socket/socketServer');
 
 const app = express();
+const server = http.createServer(app);
 const PORT = process.env.PORT || 3000;
+
+// Khởi tạo Socket.IO
+const io = initializeSocket(server);
+// Export io để sử dụng trong controllers
+app.set('io', io);
 
 // Middleware
 app.use(cors());
@@ -38,6 +46,7 @@ const thongTinXeRoutes = require('./routes/thongTinXeRoutes');
 const mediaNhanSuRoutes = require('./routes/mediaNhanSuRoutes');
 const nhanSuStatisticsRoutes = require('./routes/nhanSuStatisticsRoutes');
 const nghiaVuNopRoutes = require('./routes/nghiaVuNopRoutes');
+const thongBaoRoutes = require('./routes/thongBaoRoutes');
 
 // Auth routes (public)
 app.use('/api/auth', authRoutes);
@@ -61,6 +70,7 @@ app.use('/api/thong-tin-xe', thongTinXeRoutes);
 app.use('/api/media-nhan-su', mediaNhanSuRoutes);
 app.use('/api/nhan-su-statistics', nhanSuStatisticsRoutes);
 app.use('/api/nghia-vu-nop', nghiaVuNopRoutes);
+app.use('/api/thong-bao', thongBaoRoutes);
 
 // Test route
 app.get('/', (req, res) => {
@@ -154,11 +164,12 @@ const startServer = async () => {
       console.log('✅ Database đã sẵn sàng!');
     }
     
-    // Start server
-    app.listen(PORT, () => {
+    // Start server với Socket.IO
+    server.listen(PORT, () => {
       console.log(`🚀 Server đang chạy tại http://localhost:${PORT}`);
       console.log(`📝 Health check: http://localhost:${PORT}/health`);
       console.log(`🔍 Test DB: http://localhost:${PORT}/test-db`);
+      console.log(`🔔 Socket.IO đã sẵn sàng!`);
     });
   } catch (error) {
     console.error('❌ Không thể khởi động server:', error);

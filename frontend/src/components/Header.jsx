@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { HiBell, HiLogout, HiMenu } from 'react-icons/hi';
+import { HiLogout, HiMenu } from 'react-icons/hi';
+import NotificationBell from './NotificationBell';
 import React from 'react';
 const breadcrumbLabels = {
   dashboard: 'Dashboard',
@@ -118,14 +119,7 @@ const Header = ({ onMenuClick }) => {
             {roleLabels[user.role] || user.quyen?.mo_ta || user.position || 'Người dùng'}
           </p>
         </div>
-        <button
-          type="button"
-          className="relative flex items-center justify-center w-9 h-9 sm:w-11 sm:h-11 rounded-full border border-gray-200 text-gray-600 hover:bg-blue-50 transition-colors"
-          aria-label="Thông báo"
-        >
-          <HiBell className="w-4 h-4 sm:w-5 sm:h-5" />
-          <span className="absolute top-1.5 right-1.5 sm:top-2 sm:right-2 block w-2 h-2 rounded-full bg-red-500" />
-        </button>
+        <NotificationBell />
         <button
           onClick={handleLogout}
           type="button"

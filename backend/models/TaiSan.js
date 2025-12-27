@@ -47,6 +47,11 @@ module.exports = (sequelize) => {
       type: DataTypes.DATEONLY,
       allowNull: true,
       comment: 'Ngày bàn giao tài sản'
+    },
+    gia_tri: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: true,
+      comment: 'Giá trị tài sản (VND)'
     }
   }, {
     tableName: 'tai_san',

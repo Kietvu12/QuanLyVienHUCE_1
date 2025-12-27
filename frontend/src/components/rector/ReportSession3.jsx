@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaSearch, FaPlus, FaDownload, FaEye, FaEdit, FaTrash, FaPaperPlane, FaCheckCircle, FaTimesCircle, FaSpinner } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaDownload, FaEye, FaEdit, FaTrash, FaPaperPlane, FaCheckCircle, FaTimesCircle, FaSpinner, FaTimes } from 'react-icons/fa';
 import { useAuth } from '../../context/AuthContext';
 import { baoCaoAPI } from '../../services/api';
 import React from 'react';
@@ -176,6 +176,9 @@ const ReportSession3 = () => {
   const { user } = useAuth();
   const basePath = user?.role ? `/${user.role}` : '/rector';
   
+  // Kiểm tra xem user có phải viện trưởng không
+  const isVienTruong = user?.backendRole === 'vien_truong' || user?.ten_quyen === 'vien_truong';
+  
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -183,6 +186,12 @@ const ReportSession3 = () => {
   const [selectedStatus, setSelectedStatus] = useState('');
   const [selectedApprovalStatus, setSelectedApprovalStatus] = useState('');
   const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
+  
+  // State cho modal từ chối
+  const [showRejectModal, setShowRejectModal] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
+  const [selectedReport, setSelectedReport] = useState(null);
+  const [processing, setProcessing] = useState(false);
 
   // Fetch danh sách báo cáo
   const fetchReports = async () => {
@@ -195,10 +204,15 @@ const ReportSession3 = () => {
     try {
       const params = {
         id_vien: user.id_vien || undefined,
-        id_nguoi_tao: user.id,
         page: pagination.page,
         limit: pagination.limit,
       };
+      
+      // Nếu là viện trưởng, lấy tất cả báo cáo trong viện (không filter theo id_nguoi_tao)
+      // Nếu không phải viện trưởng, chỉ lấy báo cáo do mình tạo
+      if (!isVienTruong) {
+        params.id_nguoi_tao = user.id;
+      }
       
       if (selectedApprovalStatus) {
         params.trang_thai = selectedApprovalStatus;
@@ -268,6 +282,68 @@ const ReportSession3 = () => {
     } catch (error) {
       console.error('Lỗi khi xóa báo cáo:', error);
       alert('Lỗi khi xóa báo cáo: ' + error.message);
+    }
+  };
+
+  // Xử lý phê duyệt báo cáo (chỉ cho viện trưởng)
+  const handlePheDuyet = async (reportId) => {
+    if (!confirm('Bạn có chắc chắn muốn phê duyệt báo cáo này?')) return;
+
+    setProcessing(true);
+    try {
+      const response = await baoCaoAPI.pheDuyet(reportId, user.id);
+      if (response.success) {
+        alert('Phê duyệt báo cáo thành công!');
+        fetchReports();
+      } else {
+        alert('Lỗi khi phê duyệt báo cáo: ' + (response.message || 'Vui lòng thử lại'));
+      }
+    } catch (error) {
+      console.error('Lỗi khi phê duyệt báo cáo:', error);
+      alert('Lỗi khi phê duyệt báo cáo: ' + error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Mở modal từ chối
+  const handleOpenRejectModal = (report) => {
+    setSelectedReport(report);
+    setRejectReason('');
+    setShowRejectModal(true);
+  };
+
+  // Đóng modal từ chối
+  const handleCloseRejectModal = () => {
+    setShowRejectModal(false);
+    setSelectedReport(null);
+    setRejectReason('');
+  };
+
+  // Xử lý từ chối báo cáo
+  const handleTuChoi = async () => {
+    if (!rejectReason.trim()) {
+      alert('Vui lòng nhập lý do từ chối');
+      return;
+    }
+
+    if (!selectedReport) return;
+
+    setProcessing(true);
+    try {
+      const response = await baoCaoAPI.tuChoi(selectedReport.id, user.id, rejectReason);
+      if (response.success) {
+        alert('Từ chối báo cáo thành công!');
+        handleCloseRejectModal();
+        fetchReports();
+      } else {
+        alert('Lỗi khi từ chối báo cáo: ' + (response.message || 'Vui lòng thử lại'));
+      }
+    } catch (error) {
+      console.error('Lỗi khi từ chối báo cáo:', error);
+      alert('Lỗi khi từ chối báo cáo: ' + error.message);
+    } finally {
+      setProcessing(false);
     }
   };
 
@@ -425,9 +501,16 @@ const ReportSession3 = () => {
                     </span>
                   </td>
                   <td className="py-4 px-4 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getApprovalStatusColor(report.trang_thai)}`}>
-                      {getStatusLabel(report.trang_thai)}
-                    </span>
+                    <div className="flex flex-col items-center gap-1">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getApprovalStatusColor(report.trang_thai)}`}>
+                        {getStatusLabel(report.trang_thai)}
+                      </span>
+                      {report.ly_do_tu_choi && (
+                        <p className="text-xs text-red-600 mt-1 max-w-xs truncate" title={report.ly_do_tu_choi}>
+                          Lý do: {report.ly_do_tu_choi}
+                        </p>
+                      )}
+                    </div>
                   </td>
                   <td className="py-4 px-4">
                     <span className="text-sm text-gray-700">{report.nguoiPheDuyet?.ho_ten || report.nguoiPheDuyet?.username || '-'}</span>
@@ -446,12 +529,29 @@ const ReportSession3 = () => {
                       <button className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Xem chi tiết">
                         <FaEye className="w-4 h-4" />
                       </button>
-                      {report.status === 'Đã hoàn thành' && report.approvalStatus === 'Đã duyệt' && (
-                        <button className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors" title="Tải xuống">
-                          <FaDownload className="w-4 h-4" />
-                        </button>
+                      {/* Nút phê duyệt/từ chối cho viện trưởng */}
+                      {isVienTruong && report.trang_thai === 'cho_phe_duyet' && report.ngay_gui && (
+                        <>
+                          <button
+                            onClick={() => handlePheDuyet(report.id)}
+                            disabled={processing}
+                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors disabled:opacity-50"
+                            title="Phê duyệt"
+                          >
+                            <FaCheckCircle className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleOpenRejectModal(report)}
+                            disabled={processing}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                            title="Từ chối"
+                          >
+                            <FaTimesCircle className="w-4 h-4" />
+                          </button>
+                        </>
                       )}
-                      {report.trang_thai === 'cho_phe_duyet' && !report.ngay_gui && (
+                      {/* Nút gửi báo cáo cho người tạo */}
+                      {!isVienTruong && report.trang_thai === 'cho_phe_duyet' && !report.ngay_gui && (
                         <button 
                           onClick={() => handleGuiBaoCao(report.id)}
                           className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors" 
@@ -460,7 +560,7 @@ const ReportSession3 = () => {
                           <FaPaperPlane className="w-4 h-4" />
                         </button>
                       )}
-                      {report.trang_thai === 'tu_choi' && (
+                      {!isVienTruong && report.trang_thai === 'tu_choi' && (
                         <button 
                           onClick={() => handleGuiBaoCao(report.id)}
                           className="p-1.5 text-orange-600 hover:bg-orange-50 rounded transition-colors" 
@@ -471,7 +571,7 @@ const ReportSession3 = () => {
                       )}
                       {report.duong_dan_tai_lieu && (
                         <a 
-                          href={report.duong_dan_tai_lieu}
+                          href={report.duong_dan_tai_lieu.startsWith('http') ? report.duong_dan_tai_lieu : `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${report.duong_dan_tai_lieu}`}
                           download
                           className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors inline-block" 
                           title="Tải xuống"
@@ -479,23 +579,24 @@ const ReportSession3 = () => {
                           <FaDownload className="w-4 h-4" />
                         </a>
                       )}
-                      {report.trang_thai === 'cho_phe_duyet' && (
-                        <button 
-                          onClick={() => navigate(`${basePath}/report/edit/${report.id}`)}
-                          className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors" 
-                          title="Chỉnh sửa"
-                        >
-                          <FaEdit className="w-4 h-4" />
-                        </button>
-                      )}
-                      {report.trang_thai === 'cho_phe_duyet' && (
-                        <button 
-                          onClick={() => handleDeleteBaoCao(report.id)}
-                          className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors" 
-                          title="Xóa"
-                        >
-                          <FaTrash className="w-4 h-4" />
-                        </button>
+                      {/* Nút sửa/xóa chỉ cho người tạo */}
+                      {!isVienTruong && report.trang_thai === 'cho_phe_duyet' && (
+                        <>
+                          <button 
+                            onClick={() => navigate(`${basePath}/report/edit/${report.id}`)}
+                            className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors" 
+                            title="Chỉnh sửa"
+                          >
+                            <FaEdit className="w-4 h-4" />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteBaoCao(report.id)}
+                            className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors" 
+                            title="Xóa"
+                          >
+                            <FaTrash className="w-4 h-4" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </td>
@@ -565,10 +666,37 @@ const ReportSession3 = () => {
                     </div>
                   </>
                 )}
+                {report.ly_do_tu_choi && (
+                  <div className="pt-2 border-t border-gray-100">
+                    <span className="text-xs text-red-600 font-medium">Lý do từ chối: {report.ly_do_tu_choi}</span>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-gray-100">
-                {report.trang_thai === 'cho_phe_duyet' && !report.ngay_gui && (
+                {/* Nút phê duyệt/từ chối cho viện trưởng */}
+                {isVienTruong && report.trang_thai === 'cho_phe_duyet' && report.ngay_gui && (
+                  <>
+                    <button
+                      onClick={() => handlePheDuyet(report.id)}
+                      disabled={processing}
+                      className="p-2 text-emerald-600 hover:bg-emerald-50 rounded transition-colors disabled:opacity-50"
+                      title="Phê duyệt"
+                    >
+                      <FaCheckCircle className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleOpenRejectModal(report)}
+                      disabled={processing}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded transition-colors disabled:opacity-50"
+                      title="Từ chối"
+                    >
+                      <FaTimesCircle className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                {/* Nút gửi báo cáo cho người tạo */}
+                {!isVienTruong && report.trang_thai === 'cho_phe_duyet' && !report.ngay_gui && (
                   <button 
                     onClick={() => handleGuiBaoCao(report.id)}
                     className="p-2 text-purple-600 hover:bg-purple-50 rounded transition-colors" 
@@ -577,7 +705,7 @@ const ReportSession3 = () => {
                     <FaPaperPlane className="w-4 h-4" />
                   </button>
                 )}
-                {report.trang_thai === 'tu_choi' && (
+                {!isVienTruong && report.trang_thai === 'tu_choi' && (
                   <button 
                     onClick={() => handleGuiBaoCao(report.id)}
                     className="p-2 text-orange-600 hover:bg-orange-50 rounded transition-colors" 
@@ -588,7 +716,7 @@ const ReportSession3 = () => {
                 )}
                 {report.duong_dan_tai_lieu && (
                   <a 
-                    href={report.duong_dan_tai_lieu}
+                    href={report.duong_dan_tai_lieu.startsWith('http') ? report.duong_dan_tai_lieu : `${import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000'}${report.duong_dan_tai_lieu}`}
                     download
                     className="p-2 text-emerald-600 hover:bg-emerald-50 rounded transition-colors inline-block" 
                     title="Tải xuống"
@@ -596,7 +724,8 @@ const ReportSession3 = () => {
                     <FaDownload className="w-4 h-4" />
                   </a>
                 )}
-                {report.trang_thai === 'cho_phe_duyet' && (
+                {/* Nút sửa/xóa chỉ cho người tạo */}
+                {!isVienTruong && report.trang_thai === 'cho_phe_duyet' && (
                   <>
                     <button 
                       onClick={() => navigate(`${basePath}/report/edit/${report.id}`)}
@@ -661,6 +790,74 @@ const ReportSession3 = () => {
           </div>
         )}
       </div>
+
+      {/* Modal từ chối báo cáo */}
+      {showRejectModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Từ chối báo cáo</h3>
+              <button
+                onClick={handleCloseRejectModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              <div className="mb-4">
+                <p className="text-sm text-gray-600 mb-2">
+                  <strong>Báo cáo:</strong> {selectedReport?.tieu_de}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <strong>Người tạo:</strong> {selectedReport?.nguoiTao?.ho_ten || selectedReport?.nguoiTao?.username || '-'}
+                </p>
+              </div>
+              
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Lý do từ chối <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="Nhập lý do từ chối báo cáo..."
+                  rows={4}
+                  className="w-full px-4 py-2 rounded-lg border border-gray-300 bg-white text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200">
+              <button
+                onClick={handleCloseRejectModal}
+                disabled={processing}
+                className="px-4 py-2 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleTuChoi}
+                disabled={processing || !rejectReason.trim()}
+                className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {processing ? (
+                  <>
+                    <FaSpinner className="w-4 h-4 animate-spin" />
+                    Đang xử lý...
+                  </>
+                ) : (
+                  <>
+                    <FaTimesCircle className="w-4 h-4" />
+                    Từ chối
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

@@ -10,22 +10,9 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import React from 'react';
-const categoryData = [
-  { category: 'Máy tính', fullCategory: 'Máy tính', count: 185, value: 4500000000 },
-  { category: 'Nội thất', fullCategory: 'Nội thất', count: 142, value: 3200000000 },
-  { category: 'Thiết bị', fullCategory: 'Thiết bị', count: 98, value: 2800000000 },
-  { category: 'Phương tiện', fullCategory: 'Phương tiện', count: 23, value: 1500000000 },
-  { category: 'Khác', fullCategory: 'Khác', count: 10, value: 500000000 },
-];
-
-const statusData = [
-  { name: 'Đang sử dụng', value: 412, color: '#10b981' },
-  { name: 'Cần bảo trì', value: 28, color: '#f59e0b' },
-  { name: 'Có sẵn', value: 18, color: '#3b82f6' },
-  { name: 'Hỏng', value: 18, color: '#ef4444' },
-];
-
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { taiSanAPI } from '../../services/api';
 
 const formatCurrency = (value) => {
   if (typeof value === 'number') {
@@ -35,6 +22,82 @@ const formatCurrency = (value) => {
 };
 
 const AssetSession2 = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [categoryData, setCategoryData] = useState([]);
+  const [statusData, setStatusData] = useState([
+    { name: 'Đang sử dụng', value: 0, color: '#10b981' },
+    { name: 'Cần bảo trì', value: 0, color: '#f59e0b' },
+    { name: 'Hỏng', value: 0, color: '#ef4444' },
+  ]);
+  const [totalAssets, setTotalAssets] = useState(0);
+
+  useEffect(() => {
+    if (user?.id_vien) {
+      fetchData();
+    }
+  }, [user?.id_vien]);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const params = user?.id_vien ? { id_vien: user.id_vien, page: 1, limit: 10000 } : { page: 1, limit: 10000 };
+      
+      // Fetch statistics và all assets
+      const [statsResponse, assetsResponse] = await Promise.all([
+        taiSanAPI.getStatistics(user?.id_vien ? { id_vien: user.id_vien } : {}),
+        taiSanAPI.getAll(params)
+      ]);
+
+      // Xử lý dữ liệu trạng thái
+      if (statsResponse.success && statsResponse.data) {
+        const stats = statsResponse.data;
+        const total = stats.tong_tai_san || 0;
+        setTotalAssets(total);
+        
+        setStatusData([
+          { name: 'Đang sử dụng', value: stats.dang_su_dung || 0, color: '#10b981' },
+          { name: 'Cần bảo trì', value: stats.bao_tri || 0, color: '#f59e0b' },
+          { name: 'Hỏng', value: stats.thiet_bi_hong || 0, color: '#ef4444' },
+        ]);
+      }
+
+      // Xử lý dữ liệu theo loại (nếu có trong tên tài sản hoặc cần phân loại)
+      if (assetsResponse.success && assetsResponse.data) {
+        const assets = assetsResponse.data;
+        const categoryMap = {};
+        
+        // Phân loại dựa trên tên tài sản (heuristic)
+        assets.forEach(asset => {
+          const tenTaiSan = (asset.ten_tai_san || '').toLowerCase();
+          let category = 'Khác';
+          
+          if (tenTaiSan.includes('máy tính') || tenTaiSan.includes('laptop') || tenTaiSan.includes('computer') || tenTaiSan.includes('pc')) {
+            category = 'Máy tính';
+          } else if (tenTaiSan.includes('bàn') || tenTaiSan.includes('ghế') || tenTaiSan.includes('tủ') || tenTaiSan.includes('nội thất')) {
+            category = 'Nội thất';
+          } else if (tenTaiSan.includes('máy in') || tenTaiSan.includes('máy chiếu') || tenTaiSan.includes('thiết bị') || tenTaiSan.includes('equipment')) {
+            category = 'Thiết bị';
+          } else if (tenTaiSan.includes('xe') || tenTaiSan.includes('ô tô') || tenTaiSan.includes('phương tiện') || tenTaiSan.includes('vehicle')) {
+            category = 'Phương tiện';
+          }
+          
+          if (!categoryMap[category]) {
+            categoryMap[category] = { category, fullCategory: category, count: 0 };
+          }
+          categoryMap[category].count++;
+        });
+
+        const categoryArray = Object.values(categoryMap).sort((a, b) => b.count - a.count);
+        setCategoryData(categoryArray);
+      }
+    } catch (error) {
+      console.error('Lỗi khi lấy dữ liệu thống kê:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="px-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -45,34 +108,38 @@ const AssetSession2 = () => {
               Phân bố trạng thái
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              Tổng số tài sản: 476
+              Tổng số tài sản: {loading ? '...' : totalAssets}
             </p>
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={statusData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={70}
-                  innerRadius={30}
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  labelLine={false}
-                >
-                  {statusData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value, name) => [value, name]}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="text-center text-gray-500">Đang tải...</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={statusData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={70}
+                    innerRadius={30}
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                    labelLine={false}
+                  >
+                    {statusData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    formatter={(value, name) => [value, name]}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
 
           {/* Legend personalizada */}
@@ -97,60 +164,66 @@ const AssetSession2 = () => {
               Phân bố theo loại tài sản
             </h3>
             <p className="text-xs text-gray-400 mt-1">
-              Tổng số tài sản: 458
+              Tổng số tài sản: {loading ? '...' : categoryData.reduce((sum, item) => sum + (item.count || 0), 0)}
             </p>
           </div>
 
           <div className="flex-1 flex items-center justify-center min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={categoryData}
-                layout="vertical"
-                margin={{ top: 10, right: 20, bottom: 10, left: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
-                <XAxis 
-                  type="number" 
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fill: '#9CA3AF' }}
-                />
-                <YAxis
-                  dataKey="category"
-                  type="category"
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 11, fill: '#6B7280' }}
-                  width={60}
-                  interval={0}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(59,130,246,0.1)' }}
-                  contentStyle={{ 
-                    fontSize: 12, 
-                    borderRadius: 8,
-                    border: '1px solid #e5e7eb',
-                    backgroundColor: '#fff'
-                  }}
-                  formatter={(value, name, props) => {
-                    const fullCategory = props.payload?.fullCategory || props.payload?.category;
-                    return [value, fullCategory];
-                  }}
-                  labelFormatter={(label, payload) => {
-                    if (payload && payload.length > 0) {
-                      return payload[0].payload.fullCategory || payload[0].payload.category;
-                    }
-                    return label;
-                  }}
-                />
-                <Bar
-                  dataKey="count"
-                  fill="#3b82f6"
-                  radius={[0, 6, 6, 0]}
-                  name="Số lượng"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="text-center text-gray-500">Đang tải...</div>
+            ) : categoryData.length === 0 ? (
+              <div className="text-center text-gray-500">Chưa có dữ liệu</div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={categoryData}
+                  layout="vertical"
+                  margin={{ top: 10, right: 20, bottom: 10, left: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e5e7eb" />
+                  <XAxis 
+                    type="number" 
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: '#9CA3AF' }}
+                  />
+                  <YAxis
+                    dataKey="category"
+                    type="category"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11, fill: '#6B7280' }}
+                    width={60}
+                    interval={0}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(59,130,246,0.1)' }}
+                    contentStyle={{ 
+                      fontSize: 12, 
+                      borderRadius: 8,
+                      border: '1px solid #e5e7eb',
+                      backgroundColor: '#fff'
+                    }}
+                    formatter={(value, name, props) => {
+                      const fullCategory = props.payload?.fullCategory || props.payload?.category;
+                      return [value, fullCategory];
+                    }}
+                    labelFormatter={(label, payload) => {
+                      if (payload && payload.length > 0) {
+                        return payload[0].payload.fullCategory || payload[0].payload.category;
+                      }
+                      return label;
+                    }}
+                  />
+                  <Bar
+                    dataKey="count"
+                    fill="#3b82f6"
+                    radius={[0, 6, 6, 0]}
+                    name="Số lượng"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
