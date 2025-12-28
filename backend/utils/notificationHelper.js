@@ -79,7 +79,8 @@ const sendDataUpdateNotification = async (io, idVien, idNguoiGui, loaiDuLieu, id
       'phong_cua_vien': 'Phòng của Viện',
       'bao_cao': 'Báo cáo',
       'doanh_thu': 'Doanh thu',
-      'chi_phi': 'Chi phí'
+      'chi_phi': 'Chi phí',
+      'de_tai_nghien_cuu': 'Đề tài nghiên cứu'
     };
 
     const hanhDongLabels = {

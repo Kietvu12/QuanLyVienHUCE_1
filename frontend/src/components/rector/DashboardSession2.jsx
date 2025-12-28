@@ -10,6 +10,7 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
+import { FaTimes } from 'react-icons/fa';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { nghiaVuNopAPI } from '../../services/api';
@@ -44,9 +45,24 @@ const DashboardSession2 = () => {
   const [tongDaNop, setTongDaNop] = useState(0);
   const [tongCongNo, setTongCongNo] = useState(0);
 
+  // Modal thanh toán công nợ
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [availableNghiaVuNop, setAvailableNghiaVuNop] = useState([]);
+  const [debtFormData, setDebtFormData] = useState({
+    id_nghia_vu: '',
+    so_tien_thanh_toan: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
+
   useEffect(() => {
     fetchCongNoData();
   }, [user?.id_vien, tuNgay, denNgay]);
+
+  useEffect(() => {
+    if (showPaymentModal) {
+      fetchAvailableNghiaVuNop();
+    }
+  }, [showPaymentModal, user?.id_vien]);
 
   const fetchCongNoData = async () => {
     try {
@@ -82,6 +98,76 @@ const DashboardSession2 = () => {
       console.error('Error fetching cong no data:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAvailableNghiaVuNop = async () => {
+    try {
+      const response = await nghiaVuNopAPI.getAll({
+        id_vien: user?.id_vien,
+        trang_thai: 'chua_nop',
+        limit: 100
+      });
+      if (response.success) {
+        setAvailableNghiaVuNop(response.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching nghia vu nop:', err);
+    }
+  };
+
+  const handleOpenPaymentModal = () => {
+    setShowPaymentModal(true);
+    setDebtFormData({
+      id_nghia_vu: '',
+      so_tien_thanh_toan: ''
+    });
+  };
+
+  const handleClosePaymentModal = () => {
+    setShowPaymentModal(false);
+    setDebtFormData({
+      id_nghia_vu: '',
+      so_tien_thanh_toan: ''
+    });
+  };
+
+  const handleDebtSubmit = async (e) => {
+    e.preventDefault();
+    if (!debtFormData.id_nghia_vu || !debtFormData.so_tien_thanh_toan) {
+      alert('Vui lòng điền đầy đủ thông tin bắt buộc');
+      return;
+    }
+
+    const soTien = parseFloat(debtFormData.so_tien_thanh_toan.replace(/[^\d]/g, ''));
+    if (soTien <= 0) {
+      alert('Số tiền thanh toán phải lớn hơn 0');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      const data = {
+        id_nghia_vu: parseInt(debtFormData.id_nghia_vu),
+        so_tien_thanh_toan: soTien,
+        id_vien: user?.id_vien
+      };
+
+      const response = await nghiaVuNopAPI.thanhToanCongNo(data);
+      if (response.success) {
+        alert('Thanh toán công nợ thành công!');
+        handleClosePaymentModal();
+        fetchCongNoData();
+        // Dispatch event để các component khác tự động refresh
+        window.dispatchEvent(new Event('expenseUpdated'));
+      } else {
+        alert(response.message || 'Lỗi khi thanh toán công nợ');
+      }
+    } catch (err) {
+      console.error('Error paying debt:', err);
+      alert(err.message || 'Lỗi khi thanh toán công nợ');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -236,9 +322,10 @@ const DashboardSession2 = () => {
             </div>
             <button
               type="button"
-              className="px-4 py-1.5 rounded-full border border-[#E5E7EB] text-xs font-medium text-blue-600 hover:bg-blue-50"
+              onClick={handleOpenPaymentModal}
+              className="px-4 py-1.5 rounded-full border border-[#E5E7EB] text-xs font-medium text-blue-600 hover:bg-blue-50 transition-colors"
             >
-              View Report
+              Thanh toán nhanh
             </button>
           </div>
 
@@ -297,6 +384,114 @@ const DashboardSession2 = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal thanh toán công nợ */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-900">Thanh toán công nợ</h2>
+              <button
+                onClick={handleClosePaymentModal}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <FaTimes className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleDebtSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Chọn nghĩa vụ nộp <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={debtFormData.id_nghia_vu}
+                  onChange={(e) => setDebtFormData({ ...debtFormData, id_nghia_vu: e.target.value })}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">-- Chọn nghĩa vụ nộp --</option>
+                  {availableNghiaVuNop.map((nghiaVu) => {
+                    const congNo = nghiaVu.congNo;
+                    const congNoAmount = congNo ? parseFloat(congNo.cong_no) : (nghiaVu.so_tien_phai_nop ? parseFloat(nghiaVu.so_tien_phai_nop) : 0);
+                    const soTienDaNop = congNo ? parseFloat(congNo.so_tien_da_nop) : 0;
+                    return (
+                      <option key={nghiaVu.id} value={nghiaVu.id}>
+                        Nghĩa vụ #{nghiaVu.id} - Hạn nộp: {formatDate(nghiaVu.han_nop)} - Công nợ: {formatCurrency(congNoAmount)} - Đã nộp: {formatCurrency(soTienDaNop)}
+                      </option>
+                    );
+                  })}
+                </select>
+                {debtFormData.id_nghia_vu && (() => {
+                  const selectedNghiaVu = availableNghiaVuNop.find(nv => nv.id === parseInt(debtFormData.id_nghia_vu));
+                  const congNo = selectedNghiaVu?.congNo;
+                  const congNoAmount = congNo ? parseFloat(congNo.cong_no) : (selectedNghiaVu?.so_tien_phai_nop ? parseFloat(selectedNghiaVu.so_tien_phai_nop) : 0);
+                  return (
+                    <div className="mt-2 p-3 bg-blue-50 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">
+                        <strong>Hạn nộp:</strong> {formatDate(selectedNghiaVu?.han_nop)}
+                      </p>
+                      <p className="text-xs text-gray-600 mb-1">
+                        <strong>Công nợ hiện tại:</strong> <span className="text-red-600 font-semibold">{formatCurrency(congNoAmount)}</span>
+                      </p>
+                      {congNo && (
+                        <p className="text-xs text-gray-600">
+                          <strong>Đã nộp:</strong> {formatCurrency(parseFloat(congNo.so_tien_da_nop))}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Số tiền thanh toán (VNĐ) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={debtFormData.so_tien_thanh_toan}
+                  onChange={(e) => {
+                    const value = e.target.value.replace(/[^\d]/g, '');
+                    setDebtFormData({ ...debtFormData, so_tien_thanh_toan: value });
+                  }}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Nhập số tiền thanh toán"
+                />
+                {debtFormData.so_tien_thanh_toan && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    {new Intl.NumberFormat('vi-VN').format(parseFloat(debtFormData.so_tien_thanh_toan) || 0)} đ
+                  </p>
+                )}
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p className="text-sm text-yellow-800">
+                  <strong>Lưu ý:</strong> Khi thanh toán công nợ, hệ thống sẽ tự động tạo một phiếu chi tương ứng với trạng thái "Đã tất toán".
+                </p>
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                <button
+                  type="button"
+                  onClick={handleClosePaymentModal}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {submitting ? 'Đang thanh toán...' : 'Thanh toán công nợ'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
 };

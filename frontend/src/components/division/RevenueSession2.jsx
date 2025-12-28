@@ -7,21 +7,83 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from 'recharts';
-import React from 'react'
-const instituteData = [
-  { institute: 'Viện Tin học Xây Dựng', thu: 4500000000, chi: 3200000000, congno: 850000000 },
-  { institute: 'Viện Khoa học Công nghệ', thu: 3800000000, chi: 2800000000, congno: 650000000 },
-  { institute: 'Viện Nghiên cứu Phát triển', thu: 4150000000, chi: 3850000000, congno: 350000000 },
-];
+import React, { useState, useEffect } from 'react';
+import { vienAPI, doanhThuAPI, nghiaVuNopAPI } from '../../services/api';
 
 const formatCurrency = (value) => {
-  if (typeof value === 'number') {
-    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value) + ' đ';
+  if (typeof value === 'number' || typeof value === 'string') {
+    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(parseFloat(value) || 0) + ' đ';
   }
-  return value;
+  return '0 đ';
 };
 
 const RevenueSession2 = () => {
+  const [loading, setLoading] = useState(true);
+  const [instituteData, setInstituteData] = useState([]);
+
+  useEffect(() => {
+    fetchInstituteData();
+  }, []);
+
+  const fetchInstituteData = async () => {
+    try {
+      setLoading(true);
+      
+      // Lấy danh sách tất cả viện
+      const vienResponse = await vienAPI.getAll({ limit: 100 });
+      if (!vienResponse.success) {
+        console.error('Error fetching viens:', vienResponse.message);
+        return;
+      }
+
+      const viens = vienResponse.data || [];
+      
+      // Lấy thống kê cho từng viện
+      const dataPromises = viens.map(async (vien) => {
+        try {
+          const [revenueStats, debtStats] = await Promise.allSettled([
+            doanhThuAPI.getStatistics({ id_vien: vien.id }),
+            nghiaVuNopAPI.getStatistics({ id_vien: vien.id })
+          ]);
+
+          const revenueData = revenueStats.status === 'fulfilled' ? revenueStats.value : null;
+          const debtData = debtStats.status === 'fulfilled' ? debtStats.value : null;
+
+          // Tính tổng doanh thu (đã nhận)
+          const tongDoanhThu = revenueData?.success ? (revenueData.data?.tong_doanh_thu || 0) : 0;
+          
+          // Tính tổng chi phí từ API statistics
+          const tongChiPhi = revenueData?.success ? (parseFloat(revenueData.data?.tong_chi_phi) || 0) : 0;
+          
+          // Tổng công nợ
+          const tongCongNo = debtData?.success ? (debtData.data?.tong_cong_no || 0) : 0;
+
+          return {
+            institute: vien.ten_vien,
+            thu: tongDoanhThu,
+            chi: tongChiPhi,
+            congno: tongCongNo
+          };
+        } catch (err) {
+          console.error(`Error fetching data for vien ${vien.id}:`, err);
+          return {
+            institute: vien.ten_vien,
+            thu: 0,
+            chi: 0,
+            congno: 0
+          };
+        }
+      });
+
+      const results = await Promise.all(dataPromises);
+      setInstituteData(results);
+    } catch (err) {
+      console.error('Error fetching institute data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="px-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -39,44 +101,50 @@ const RevenueSession2 = () => {
           </div>
 
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={instituteData} margin={{ top: 10, right: 10, bottom: 40, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis
-                  dataKey="institute"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontSize: 10, fill: '#6B7280' }}
-                  angle={0}
-                  textAnchor="middle"
-                  height={40}
-                  interval={0}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: '#D1D5DB' }}
-                  tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}T`}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(59,130,246,0.1)' }}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                  formatter={(value) => formatCurrency(value)}
-                />
-                <Bar
-                  dataKey="thu"
-                  fill="#3b82f6"
-                  radius={[6, 6, 0, 0]}
-                  name="Thu"
-                />
-                <Bar
-                  dataKey="chi"
-                  fill="#ef4444"
-                  radius={[6, 6, 0, 0]}
-                  name="Chi"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Đang tải...
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={instituteData} margin={{ top: 10, right: 10, bottom: 40, left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="institute"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10, fill: '#6B7280' }}
+                    angle={0}
+                    textAnchor="middle"
+                    height={40}
+                    interval={0}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: '#D1D5DB' }}
+                    tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}T`}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(59,130,246,0.1)' }}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                    formatter={(value) => formatCurrency(value)}
+                  />
+                  <Bar
+                    dataKey="thu"
+                    fill="#3b82f6"
+                    radius={[6, 6, 0, 0]}
+                    name="Thu"
+                  />
+                  <Bar
+                    dataKey="chi"
+                    fill="#ef4444"
+                    radius={[6, 6, 0, 0]}
+                    name="Chi"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -94,38 +162,44 @@ const RevenueSession2 = () => {
           </div>
 
           <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={instituteData} margin={{ top: 10, right: 10, bottom: 40, left: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis
-                  dataKey="institute"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontSize: 10, fill: '#6B7280' }}
-                  angle={0}
-                  textAnchor="middle"
-                  height={40}
-                  interval={0}
-                />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: '#D1D5DB' }}
-                  tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}T`}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(251,146,60,0.1)' }}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                  formatter={(value) => formatCurrency(value)}
-                />
-                <Bar
-                  dataKey="congno"
-                  fill="#f97316"
-                  radius={[6, 6, 0, 0]}
-                  name="Công nợ"
-                />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Đang tải...
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={instituteData} margin={{ top: 10, right: 10, bottom: 40, left: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                  <XAxis
+                    dataKey="institute"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fontSize: 10, fill: '#6B7280' }}
+                    angle={0}
+                    textAnchor="middle"
+                    height={40}
+                    interval={0}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 10, fill: '#D1D5DB' }}
+                    tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}T`}
+                  />
+                  <Tooltip
+                    cursor={{ fill: 'rgba(251,146,60,0.1)' }}
+                    contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                    formatter={(value) => formatCurrency(value)}
+                  />
+                  <Bar
+                    dataKey="congno"
+                    fill="#f97316"
+                    radius={[6, 6, 0, 0]}
+                    name="Công nợ"
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>

@@ -253,15 +253,24 @@ const getCongNoStatistics = async (req, res) => {
 
     nghiaVuNops.forEach(nv => {
       const congNo = nv.congNo;
+      
+      // Sử dụng trường so_tien_phai_nop nếu có, nếu không thì tính từ công nợ
+      let nghiaVuPhaiNop = 0;
+      if (nv.so_tien_phai_nop) {
+        nghiaVuPhaiNop = parseFloat(nv.so_tien_phai_nop);
+      } else if (congNo) {
+        // Nếu chưa có so_tien_phai_nop, tính từ công nợ + đã nộp
+        nghiaVuPhaiNop = parseFloat(congNo.cong_no || 0) + parseFloat(congNo.so_tien_da_nop || 0);
+      }
+      
+      tongNghiaVu += nghiaVuPhaiNop;
+      
       if (congNo) {
-        // Giả sử nghĩa vụ phải nộp = công nợ + đã nộp
-        const nghiaVuPhaiNop = parseFloat(congNo.cong_no) + parseFloat(congNo.so_tien_da_nop);
-        tongNghiaVu += nghiaVuPhaiNop;
-        tongDaNop += parseFloat(congNo.so_tien_da_nop);
-        tongCongNo += parseFloat(congNo.cong_no);
+        tongDaNop += parseFloat(congNo.so_tien_da_nop || 0);
+        tongCongNo += parseFloat(congNo.cong_no || 0);
       } else {
-        // Nếu chưa có công nợ, chỉ tính nghĩa vụ (cần có trường tong_tien trong nghia_vu_nop)
-        // Tạm thời bỏ qua
+        // Nếu chưa có công nợ, nghĩa vụ phải nộp = công nợ
+        tongCongNo += nghiaVuPhaiNop;
       }
     });
 

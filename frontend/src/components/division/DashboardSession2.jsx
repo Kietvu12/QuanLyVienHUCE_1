@@ -7,28 +7,87 @@ import {
   CartesianGrid,
   ResponsiveContainer,
 } from 'recharts';
-import React from 'react'
-const instituteData = [
-  { institute: 'Viện Tin học Xây Dựng', thu: 4500000000, chi: 3200000000, congno: 850000000 },
-  { institute: 'Viện Khoa học Công nghệ', thu: 3800000000, chi: 2800000000, congno: 650000000 },
-  { institute: 'Viện Nghiên cứu Phát triển', thu: 4150000000, chi: 3850000000, congno: 350000000 },
-  { institute: 'Viện Vật liệu Xây dựng', thu: 5200000000, chi: 4200000000, congno: 720000000 },
-  { institute: 'Viện Kiến trúc và Quy hoạch', thu: 4800000000, chi: 3600000000, congno: 580000000 },
-  { institute: 'Viện Môi trường và Đô thị', thu: 3900000000, chi: 3100000000, congno: 490000000 },
-  { institute: 'Viện Giao thông Vận tải', thu: 5600000000, chi: 4500000000, congno: 920000000 },
-  { institute: 'Viện Năng lượng và Cơ khí', thu: 4400000000, chi: 3400000000, congno: 680000000 },
-  { institute: 'Viện Quản lý Dự án', thu: 4100000000, chi: 3300000000, congno: 520000000 },
-  { institute: 'Viện Kinh tế Xây dựng', thu: 4700000000, chi: 3700000000, congno: 750000000 },
-];
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { vienAPI, doanhThuAPI, chiPhiAPI, nghiaVuNopAPI } from '../../services/api';
 
 const formatCurrency = (value) => {
-  if (typeof value === 'number') {
-    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(value) + ' đ';
+  if (typeof value === 'number' || typeof value === 'string') {
+    return new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 }).format(parseFloat(value) || 0) + ' đ';
   }
-  return value;
+  return '0 đ';
 };
 
 const DashboardSession2 = () => {
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [instituteData, setInstituteData] = useState([]);
+
+  useEffect(() => {
+    if (user) {
+      fetchInstituteData();
+    }
+  }, [user]);
+
+  const fetchInstituteData = async () => {
+    try {
+      setLoading(true);
+      
+      // Lấy danh sách tất cả viện
+      const vienResponse = await vienAPI.getAll({ limit: 100 });
+      if (!vienResponse.success) {
+        console.error('Error fetching viens:', vienResponse.message);
+        return;
+      }
+
+      const viens = vienResponse.data || [];
+      
+      // Lấy thống kê cho từng viện
+      const dataPromises = viens.map(async (vien) => {
+        try {
+          const [revenueStats, debtStats] = await Promise.allSettled([
+            doanhThuAPI.getStatistics({ id_vien: vien.id }),
+            nghiaVuNopAPI.getStatistics({ id_vien: vien.id })
+          ]);
+
+          const revenueData = revenueStats.status === 'fulfilled' ? revenueStats.value : null;
+          const debtData = debtStats.status === 'fulfilled' ? debtStats.value : null;
+
+          // Tính tổng doanh thu (đã nhận)
+          const tongDoanhThu = revenueData?.success ? (revenueData.data?.tong_doanh_thu || 0) : 0;
+          
+          // Tính tổng chi phí từ API statistics (đã có tong_chi_phi)
+          const tongChiPhi = revenueData?.success ? (parseFloat(revenueData.data?.tong_chi_phi) || 0) : 0;
+          
+          // Tổng công nợ
+          const tongCongNo = debtData?.success ? (debtData.data?.tong_cong_no || 0) : 0;
+
+          return {
+            institute: vien.ten_vien,
+            thu: tongDoanhThu,
+            chi: tongChiPhi,
+            congno: tongCongNo
+          };
+        } catch (err) {
+          console.error(`Error fetching data for vien ${vien.id}:`, err);
+          return {
+            institute: vien.ten_vien,
+            thu: 0,
+            chi: 0,
+            congno: 0
+          };
+        }
+      });
+
+      const results = await Promise.all(dataPromises);
+      setInstituteData(results);
+    } catch (err) {
+      console.error('Error fetching institute data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <section className="px-6 h-full flex flex-col">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 flex-1" style={{ minHeight: 0 }}>
@@ -46,53 +105,59 @@ const DashboardSession2 = () => {
           </div>
 
           <div className="flex-1 overflow-x-auto overflow-y-hidden scroll-smooth" style={{ minHeight: 0 }}>
-            <div style={{ minWidth: `${instituteData.length * 200}px`, height: '100%', minHeight: '350px' }}>
-               <ResponsiveContainer width="100%" height="100%" minHeight={350}>
-                 <BarChart 
-                   data={instituteData} 
-                   margin={{ top: 5, right: 20, bottom: 25, left: 10 }}
-                   barCategoryGap="20%"
-                 >
-                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                 <XAxis
-                   dataKey="institute"
-                   tickLine={false}
-                     axisLine={false}
-                     tick={{ fontSize: 9, fill: '#6B7280' }}
-                     angle={0}
-                     textAnchor="middle"
-                     height={25}
-                     interval={0}
-                 />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: '#D1D5DB' }}
-                  tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}T`}
-                    width={60}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(59,130,246,0.1)' }}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                  formatter={(value) => formatCurrency(value)}
-                />
-                <Bar
-                  dataKey="thu"
-                  fill="#3b82f6"
-                  radius={[6, 6, 0, 0]}
-                  name="Thu"
-                    barSize={60}
-                />
-                <Bar
-                  dataKey="chi"
-                  fill="#ef4444"
-                  radius={[6, 6, 0, 0]}
-                  name="Chi"
-                    barSize={60}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-            </div>
+            {loading ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Đang tải...
+              </div>
+            ) : (
+              <div style={{ minWidth: `${Math.max(instituteData.length * 200, 800)}px`, height: '100%', minHeight: '350px' }}>
+                <ResponsiveContainer width="100%" height="100%" minHeight={350}>
+                  <BarChart 
+                    data={instituteData} 
+                    margin={{ top: 5, right: 20, bottom: 25, left: 10 }}
+                    barCategoryGap="20%"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="institute"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 9, fill: '#6B7280' }}
+                      angle={0}
+                      textAnchor="middle"
+                      height={25}
+                      interval={0}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: '#D1D5DB' }}
+                      tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}T`}
+                      width={60}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(59,130,246,0.1)' }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                      formatter={(value) => formatCurrency(value)}
+                    />
+                    <Bar
+                      dataKey="thu"
+                      fill="#3b82f6"
+                      radius={[6, 6, 0, 0]}
+                      name="Thu"
+                      barSize={60}
+                    />
+                    <Bar
+                      dataKey="chi"
+                      fill="#ef4444"
+                      radius={[6, 6, 0, 0]}
+                      name="Chi"
+                      barSize={60}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         </div>
 
@@ -110,46 +175,52 @@ const DashboardSession2 = () => {
           </div>
 
           <div className="flex-1 overflow-x-auto overflow-y-hidden scroll-smooth" style={{ minHeight: 0 }}>
-            <div style={{ minWidth: `${instituteData.length * 200}px`, height: '100%', minHeight: '350px' }}>
-               <ResponsiveContainer width="100%" height="100%" minHeight={350}>
-                 <BarChart 
-                   data={instituteData} 
-                   margin={{ top: 5, right: 20, bottom: 25, left: 10 }}
-                   barCategoryGap="20%"
-                 >
-                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                 <XAxis
-                   dataKey="institute"
-                   tickLine={false}
-                     axisLine={false}
-                     tick={{ fontSize: 9, fill: '#6B7280' }}
-                     angle={0}
-                     textAnchor="middle"
-                     height={25}
-                     interval={0}
-                 />
-                <YAxis
-                  axisLine={false}
-                  tickLine={false}
-                  tick={{ fontSize: 10, fill: '#D1D5DB' }}
-                  tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}T`}
-                    width={60}
-                />
-                <Tooltip
-                  cursor={{ fill: 'rgba(251,146,60,0.1)' }}
-                  contentStyle={{ fontSize: 12, borderRadius: 8 }}
-                  formatter={(value) => formatCurrency(value)}
-                />
-                <Bar
-                  dataKey="congno"
-                  fill="#f97316"
-                  radius={[6, 6, 0, 0]}
-                  name="Công nợ"
-                    barSize={60}
-                />
-              </BarChart>
-            </ResponsiveContainer>
-            </div>
+            {loading ? (
+              <div className="h-full flex items-center justify-center text-gray-400 text-sm">
+                Đang tải...
+              </div>
+            ) : (
+              <div style={{ minWidth: `${Math.max(instituteData.length * 200, 800)}px`, height: '100%', minHeight: '350px' }}>
+                <ResponsiveContainer width="100%" height="100%" minHeight={350}>
+                  <BarChart 
+                    data={instituteData} 
+                    margin={{ top: 5, right: 20, bottom: 25, left: 10 }}
+                    barCategoryGap="20%"
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
+                    <XAxis
+                      dataKey="institute"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 9, fill: '#6B7280' }}
+                      angle={0}
+                      textAnchor="middle"
+                      height={25}
+                      interval={0}
+                    />
+                    <YAxis
+                      axisLine={false}
+                      tickLine={false}
+                      tick={{ fontSize: 10, fill: '#D1D5DB' }}
+                      tickFormatter={(value) => `${(value / 1000000000).toFixed(1)}T`}
+                      width={60}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(251,146,60,0.1)' }}
+                      contentStyle={{ fontSize: 12, borderRadius: 8 }}
+                      formatter={(value) => formatCurrency(value)}
+                    />
+                    <Bar
+                      dataKey="congno"
+                      fill="#f97316"
+                      radius={[6, 6, 0, 0]}
+                      name="Công nợ"
+                      barSize={60}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         </div>
       </div>

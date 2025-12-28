@@ -1,46 +1,59 @@
 import { FaFlask, FaBuilding } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
-import React from 'react'
-const recentProjects = [
-  {
-    id: 'DT-2025-001',
-    name: 'Nghiên cứu ứng dụng AI trong quản lý dự án xây dựng',
-    participants: ['Nguyễn Văn A', 'Trần Thị B', 'Lê Văn C'],
-    field: 'Công nghệ thông tin',
-    institute: 'Viện Tin học Xây Dựng',
-  },
-  {
-    id: 'DT-2025-002',
-    name: 'Phát triển hệ thống quản lý tài nguyên nước',
-    participants: ['Phạm Thị D', 'Hoàng Văn E'],
-    field: 'Kỹ thuật',
-    institute: 'Viện Khoa học Công nghệ',
-  },
-  {
-    id: 'DT-2025-003',
-    name: 'Nghiên cứu vật liệu xây dựng bền vững',
-    participants: ['Nguyễn Thị F', 'Trần Văn G', 'Lê Thị H'],
-    field: 'Xây dựng',
-    institute: 'Viện Nghiên cứu Phát triển',
-  },
-  {
-    id: 'DT-2025-004',
-    name: 'Ứng dụng IoT trong giám sát công trình',
-    participants: ['Phạm Văn I', 'Hoàng Thị K'],
-    field: 'Công nghệ thông tin',
-    institute: 'Viện Tin học Xây Dựng',
-  },
-  {
-    id: 'DT-2025-005',
-    name: 'Nghiên cứu tối ưu hóa năng lượng trong xây dựng',
-    participants: ['Nguyễn Văn L', 'Trần Thị M'],
-    field: 'Khoa học',
-    institute: 'Viện Khoa học Công nghệ',
-  },
-];
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { deTaiNghienCuuAPI } from '../../services/api';
 
 const DashboardSession4 = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [recentProjects, setRecentProjects] = useState([]);
+
+  useEffect(() => {
+    if (user) {
+      fetchRecentProjects();
+    }
+  }, [user]);
+
+  const fetchRecentProjects = async () => {
+    try {
+      setLoading(true);
+      // Cấp phòng lấy đề tài mới nhất từ tất cả viện (không filter id_vien)
+      const response = await deTaiNghienCuuAPI.getAll({
+        limit: 10,
+        page: 1
+      });
+
+      if (response.success) {
+        const projects = (response.data || []).map(item => {
+          // Lấy danh sách người tham gia từ nhanSuDeTais
+          const participants = (item.nhanSuDeTais || []).map(ns => {
+            if (ns.nhanSu) {
+              return ns.nhanSu.ho_ten;
+            } else if (ns.ten_nhan_su) {
+              return ns.ten_nhan_su;
+            }
+            return null;
+          }).filter(Boolean);
+
+          return {
+            id: `DT-${item.id}`,
+            name: item.ten_de_tai,
+            participants: participants.length > 0 ? participants : ['Chưa có thông tin'],
+            field: item.linh_vuc || 'Chưa xác định',
+            institute: item.vien?.ten_vien || 'Chưa xác định',
+            rawData: item
+          };
+        });
+        setRecentProjects(projects);
+      }
+    } catch (err) {
+      console.error('Error fetching recent projects:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <section className="px-6">
@@ -83,7 +96,16 @@ const DashboardSession4 = () => {
               </tr>
             </thead>
             <tbody>
-              {recentProjects.map((project) => (
+              {loading ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-8 text-gray-500">Đang tải...</td>
+                </tr>
+              ) : recentProjects.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="text-center py-8 text-gray-500">Không có đề tài nào</td>
+                </tr>
+              ) : (
+                recentProjects.map((project) => (
                 <tr key={project.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="py-4 px-4">
                     <span className="text-sm font-medium text-blue-600">{project.id}</span>
@@ -118,14 +140,20 @@ const DashboardSession4 = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Mobile/Tablet Cards */}
         <div className="2xl:hidden space-y-4">
-          {recentProjects.map((project) => (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">Đang tải...</div>
+          ) : recentProjects.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">Không có đề tài nào</div>
+          ) : (
+            recentProjects.map((project) => (
             <div key={project.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
@@ -163,7 +191,8 @@ const DashboardSession4 = () => {
                 </div>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </section>

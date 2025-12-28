@@ -1,5 +1,6 @@
 const db = require('../models');
 const { Op } = require('sequelize');
+const { sendDataUpdateNotification } = require('../utils/notificationHelper');
 
 // Lấy tất cả nhân sự (có thể filter theo id_vien, id_phong_ban)
 const getAllNhanSu = async (req, res) => {
@@ -202,8 +203,14 @@ const createNhanSu = async (req, res) => {
       ngay_ket_thuc_lam_viec
     } = req.body;
 
-    // Kiểm tra phòng ban tồn tại
-    const phongBan = await db.PhongBan.findByPk(id_phong_ban);
+    // Kiểm tra phòng ban tồn tại và lấy id_vien
+    const phongBan = await db.PhongBan.findByPk(id_phong_ban, {
+      include: [{
+        model: db.Vien,
+        as: 'vien',
+        attributes: ['id']
+      }]
+    });
     if (!phongBan) {
       return res.status(400).json({
         success: false,
@@ -228,6 +235,20 @@ const createNhanSu = async (req, res) => {
       ngay_bat_dau_lam: ngay_bat_dau_lam || null,
       ngay_ket_thuc_lam_viec: ngay_ket_thuc_lam_viec || null
     });
+
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user && phongBan?.vien?.id) {
+      await sendDataUpdateNotification(
+        io,
+        phongBan.vien.id,
+        req.user.id,
+        'nhan_su',
+        nhanSu.id,
+        ho_ten,
+        'them_moi'
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -308,10 +329,29 @@ const updateNhanSu = async (req, res) => {
         {
           model: db.PhongBan,
           as: 'phongBan',
-          attributes: ['id', 'ten_phong_ban']
+          attributes: ['id', 'ten_phong_ban'],
+          include: [{
+            model: db.Vien,
+            as: 'vien',
+            attributes: ['id']
+          }]
         }
       ]
     });
+
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user && updatedNhanSu?.phongBan?.vien?.id) {
+      await sendDataUpdateNotification(
+        io,
+        updatedNhanSu.phongBan.vien.id,
+        req.user.id,
+        'nhan_su',
+        updatedNhanSu.id,
+        updatedNhanSu.ho_ten,
+        'cap_nhat'
+      );
+    }
 
     res.json({
       success: true,
@@ -333,7 +373,18 @@ const deleteNhanSu = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const nhanSu = await db.NhanSu.findByPk(id);
+    const nhanSu = await db.NhanSu.findByPk(id, {
+      include: [{
+        model: db.PhongBan,
+        as: 'phongBan',
+        attributes: ['id'],
+        include: [{
+          model: db.Vien,
+          as: 'vien',
+          attributes: ['id']
+        }]
+      }]
+    });
     if (!nhanSu) {
       return res.status(404).json({
         success: false,
@@ -341,8 +392,25 @@ const deleteNhanSu = async (req, res) => {
       });
     }
 
+    const hoTen = nhanSu.ho_ten;
+    const idVien = nhanSu.phongBan?.vien?.id;
+
     // Xóa nhân sự (cascade sẽ xóa các bảng liên quan)
     await nhanSu.destroy();
+
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user && idVien) {
+      await sendDataUpdateNotification(
+        io,
+        idVien,
+        req.user.id,
+        'nhan_su',
+        id,
+        hoTen,
+        'xoa'
+      );
+    }
 
     res.json({
       success: true,

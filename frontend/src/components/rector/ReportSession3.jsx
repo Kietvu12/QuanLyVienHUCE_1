@@ -16,6 +16,9 @@ const getStatusLabel = (status) => {
     'cho_phe_duyet': 'Chờ phê duyệt',
     'da_phe_duyet': 'Đã phê duyệt',
     'tu_choi': 'Từ chối',
+    'cho_cap_phong_duyet': 'Chờ cấp phòng duyệt',
+    'da_cap_phong_duyet': 'Đã cấp phòng duyệt',
+    'cap_phong_tu_choi': 'Cấp phòng từ chối',
   };
   return statusMap[status] || status;
 };
@@ -24,9 +27,14 @@ const getStatusColor = (status) => {
   switch (status) {
     case 'da_phe_duyet':
       return 'bg-emerald-100 text-emerald-800';
+    case 'da_cap_phong_duyet':
+      return 'bg-blue-100 text-blue-800';
     case 'cho_phe_duyet':
       return 'bg-yellow-100 text-yellow-800';
+    case 'cho_cap_phong_duyet':
+      return 'bg-purple-100 text-purple-800';
     case 'tu_choi':
+    case 'cap_phong_tu_choi':
       return 'bg-red-100 text-red-800';
     default:
       return 'bg-gray-100 text-gray-800';
@@ -347,6 +355,27 @@ const ReportSession3 = () => {
     }
   };
 
+  // Xử lý gửi lên cấp phòng
+  const handleGuiLenCapPhong = async (id) => {
+    if (!confirm('Bạn có chắc chắn muốn gửi báo cáo này lên cấp phòng duyệt?')) return;
+
+    setProcessing(true);
+    try {
+      const response = await baoCaoAPI.guiLenCapPhong(id);
+      if (response.success) {
+        alert('Gửi báo cáo lên cấp phòng thành công!');
+        fetchReports();
+      } else {
+        alert('Lỗi khi gửi báo cáo lên cấp phòng: ' + (response.message || 'Vui lòng thử lại'));
+      }
+    } catch (error) {
+      console.error('Lỗi khi gửi báo cáo lên cấp phòng:', error);
+      alert('Lỗi khi gửi báo cáo lên cấp phòng: ' + error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   // Lọc báo cáo theo search term
   const filteredReports = reports.filter(report => {
     const matchesSearch = !searchTerm || 
@@ -550,6 +579,17 @@ const ReportSession3 = () => {
                           </button>
                         </>
                       )}
+                      {/* Nút gửi lên cấp phòng cho viện trưởng */}
+                      {isVienTruong && report.trang_thai === 'da_phe_duyet' && (
+                        <button
+                          onClick={() => handleGuiLenCapPhong(report.id)}
+                          disabled={processing}
+                          className="p-1.5 text-purple-600 hover:bg-purple-50 rounded transition-colors disabled:opacity-50"
+                          title="Gửi lên cấp phòng"
+                        >
+                          <FaPaperPlane className="w-4 h-4" />
+                        </button>
+                      )}
                       {/* Nút gửi báo cáo cho người tạo */}
                       {!isVienTruong && report.trang_thai === 'cho_phe_duyet' && !report.ngay_gui && (
                         <button 
@@ -580,7 +620,7 @@ const ReportSession3 = () => {
                         </a>
                       )}
                       {/* Nút sửa/xóa chỉ cho người tạo */}
-                      {!isVienTruong && report.trang_thai === 'cho_phe_duyet' && (
+                      {!isVienTruong && (report.trang_thai === 'cho_phe_duyet' || report.trang_thai === 'tu_choi' || report.trang_thai === 'cap_phong_tu_choi') && report.trang_thai !== 'da_cap_phong_duyet' && (
                         <>
                           <button 
                             onClick={() => navigate(`${basePath}/report/edit/${report.id}`)}

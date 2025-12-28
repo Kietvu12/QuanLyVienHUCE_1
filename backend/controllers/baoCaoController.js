@@ -252,11 +252,20 @@ const updateBaoCao = async (req, res) => {
       });
     }
 
-    // Chỉ cho phép sửa khi chưa được phê duyệt
-    if (baoCao.trang_thai !== 'cho_phe_duyet') {
+    // Chỉ cho phép sửa khi chưa được phê duyệt hoặc bị từ chối (có thể sửa lại)
+    // Không cho sửa khi đã được cấp phòng duyệt
+    if (baoCao.trang_thai === 'da_cap_phong_duyet') {
       return res.status(400).json({
         success: false,
-        message: 'Không thể sửa báo cáo đã được phê duyệt hoặc từ chối'
+        message: 'Không thể sửa báo cáo đã được cấp phòng duyệt'
+      });
+    }
+    
+    // Cho phép sửa khi bị từ chối (có thể sửa lại)
+    if (baoCao.trang_thai !== 'cho_phe_duyet' && baoCao.trang_thai !== 'tu_choi' && baoCao.trang_thai !== 'cap_phong_tu_choi') {
+      return res.status(400).json({
+        success: false,
+        message: 'Không thể sửa báo cáo đã được phê duyệt'
       });
     }
 
@@ -462,24 +471,18 @@ const guiBaoCao = async (req, res) => {
   }
 };
 
-// Phê duyệt báo cáo
+// Phê duyệt báo cáo (có thể là viện trưởng hoặc cấp phòng)
 const pheDuyetBaoCao = async (req, res) => {
   try {
     const { id } = req.params;
     const { id_nguoi_phe_duyet } = req.body;
+    const userRole = req.user.ten_quyen;
 
     const baoCao = await db.BaoCao.findByPk(id);
     if (!baoCao) {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy báo cáo'
-      });
-    }
-
-    if (baoCao.trang_thai !== 'cho_phe_duyet') {
-      return res.status(400).json({
-        success: false,
-        message: 'Báo cáo không ở trạng thái chờ phê duyệt'
       });
     }
 
@@ -492,10 +495,49 @@ const pheDuyetBaoCao = async (req, res) => {
       });
     }
 
-    await baoCao.update({
-      trang_thai: 'da_phe_duyet',
-      id_nguoi_phe_duyet: id_nguoi_phe_duyet
-    });
+    let updateData = {};
+    let trangThaiMoi = '';
+    let message = '';
+
+    // Nếu là cấp phòng duyệt
+    if (userRole === 'cap_phong') {
+      if (baoCao.trang_thai !== 'cho_cap_phong_duyet') {
+        return res.status(400).json({
+          success: false,
+          message: 'Báo cáo không ở trạng thái chờ cấp phòng duyệt'
+        });
+      }
+      trangThaiMoi = 'da_cap_phong_duyet';
+      updateData = {
+        trang_thai: trangThaiMoi,
+        id_nguoi_cap_phong_phe_duyet: id_nguoi_phe_duyet,
+        ngay_cap_phong_duyet: new Date()
+        // Giữ lại id_nguoi_phe_duyet (viện trưởng) - không cập nhật field này
+      };
+      message = 'Cấp phòng đã phê duyệt báo cáo';
+    } 
+    // Nếu là viện trưởng duyệt
+    else if (userRole === 'vien_truong') {
+      if (baoCao.trang_thai !== 'cho_phe_duyet') {
+        return res.status(400).json({
+          success: false,
+          message: 'Báo cáo không ở trạng thái chờ phê duyệt'
+        });
+      }
+      trangThaiMoi = 'da_phe_duyet';
+      updateData = {
+        trang_thai: trangThaiMoi,
+        id_nguoi_phe_duyet: id_nguoi_phe_duyet
+      };
+      message = 'Viện trưởng đã phê duyệt báo cáo';
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền phê duyệt báo cáo'
+      });
+    }
+
+    await baoCao.update(updateData);
 
     const updatedBaoCao = await db.BaoCao.findByPk(id, {
       include: [
@@ -513,37 +555,86 @@ const pheDuyetBaoCao = async (req, res) => {
         {
           model: db.TaiKhoan,
           as: 'nguoiPheDuyet',
-          attributes: ['id', 'username', 'ho_ten']
+          attributes: ['id', 'username', 'ho_ten'],
+          required: false
+        },
+        {
+          model: db.TaiKhoan,
+          as: 'nguoiCapPhongPheDuyet',
+          attributes: ['id', 'username', 'ho_ten'],
+          required: false
         }
       ]
     });
 
-    // Gửi thông báo cho người tạo báo cáo khi được phê duyệt
+    // Gửi thông báo
     const io = req.app.get('io');
-    if (io && updatedBaoCao.id_nguoi_tao) {
+    if (io) {
       const { sendNotificationToUser } = require('../socket/socketServer');
       const nguoiPheDuyetName = updatedBaoCao.nguoiPheDuyet?.ho_ten || 
+                                updatedBaoCao.nguoiCapPhongPheDuyet?.ho_ten ||
                                 updatedBaoCao.nguoiPheDuyet?.username || 
+                                updatedBaoCao.nguoiCapPhongPheDuyet?.username ||
                                 req.user?.ho_ten || 
                                 req.user?.username || 
-                                'Viện trưởng';
-      await sendNotificationToUser(
-        io,
-        updatedBaoCao.id_nguoi_tao,
-        {
-          id_nguoi_gui: id_nguoi_phe_duyet,
-          tieu_de: 'Báo cáo đã được phê duyệt',
-          noi_dung: `Báo cáo "${updatedBaoCao.tieu_de}" đã được phê duyệt bởi ${nguoiPheDuyetName}`,
-          loai: 'thanh_cong',
-          loai_du_lieu: 'bao_cao',
-          id_du_lieu: updatedBaoCao.id
+                                (userRole === 'cap_phong' ? 'Cấp phòng' : 'Viện trưởng');
+
+      // Gửi thông báo cho người tạo báo cáo
+      if (updatedBaoCao.id_nguoi_tao) {
+        await sendNotificationToUser(
+          io,
+          updatedBaoCao.id_nguoi_tao,
+          {
+            id_nguoi_gui: id_nguoi_phe_duyet,
+            tieu_de: userRole === 'cap_phong' ? 'Báo cáo đã được cấp phòng duyệt' : 'Báo cáo đã được phê duyệt',
+            noi_dung: `Báo cáo "${updatedBaoCao.tieu_de}" đã được phê duyệt bởi ${nguoiPheDuyetName}`,
+            loai: 'thanh_cong',
+            loai_du_lieu: 'bao_cao',
+            id_du_lieu: updatedBaoCao.id
+          }
+        );
+      }
+
+      // Nếu là cấp phòng duyệt, gửi thông báo cho viện trưởng và kế toán của viện
+      if (userRole === 'cap_phong' && updatedBaoCao.id_vien) {
+        // Lấy viện trưởng và kế toán của viện
+        const vienTruongVaKeToan = await db.TaiKhoan.findAll({
+          where: {
+            id_vien: updatedBaoCao.id_vien,
+            trang_thai: 1
+          },
+          include: [
+            {
+              model: db.Quyen,
+              as: 'quyen',
+              attributes: ['ten_quyen'],
+              where: {
+                ten_quyen: { [Op.in]: ['vien_truong', 'ke_toan_vien'] }
+              }
+            }
+          ]
+        });
+
+        for (const user of vienTruongVaKeToan) {
+          await sendNotificationToUser(
+            io,
+            user.id,
+            {
+              id_nguoi_gui: id_nguoi_phe_duyet,
+              tieu_de: 'Báo cáo đã được cấp phòng duyệt',
+              noi_dung: `Báo cáo "${updatedBaoCao.tieu_de}" của Viện ${updatedBaoCao.vien?.ten_vien || ''} đã được cấp phòng duyệt`,
+              loai: 'thanh_cong',
+              loai_du_lieu: 'bao_cao',
+              id_du_lieu: updatedBaoCao.id
+            }
+          );
         }
-      );
+      }
     }
 
     res.json({
       success: true,
-      message: 'Phê duyệt báo cáo thành công',
+      message: message,
       data: updatedBaoCao
     });
   } catch (error) {
@@ -556,24 +647,18 @@ const pheDuyetBaoCao = async (req, res) => {
   }
 };
 
-// Từ chối báo cáo
+// Từ chối báo cáo (có thể là viện trưởng hoặc cấp phòng)
 const tuChoiBaoCao = async (req, res) => {
   try {
     const { id } = req.params;
     const { id_nguoi_phe_duyet, ly_do_tu_choi } = req.body;
+    const userRole = req.user.ten_quyen;
 
     const baoCao = await db.BaoCao.findByPk(id);
     if (!baoCao) {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy báo cáo'
-      });
-    }
-
-    if (baoCao.trang_thai !== 'cho_phe_duyet') {
-      return res.status(400).json({
-        success: false,
-        message: 'Báo cáo không ở trạng thái chờ phê duyệt'
       });
     }
 
@@ -586,11 +671,69 @@ const tuChoiBaoCao = async (req, res) => {
       });
     }
 
-    await baoCao.update({
-      trang_thai: 'tu_choi',
-      id_nguoi_phe_duyet: id_nguoi_phe_duyet,
-      ly_do_tu_choi: ly_do_tu_choi || null
-    });
+    let updateData = {};
+    let trangThaiMoi = '';
+    let message = '';
+
+    // Nếu là cấp phòng từ chối
+    if (userRole === 'cap_phong') {
+      if (baoCao.trang_thai !== 'cho_cap_phong_duyet') {
+        return res.status(400).json({
+          success: false,
+          message: 'Báo cáo không ở trạng thái chờ cấp phòng duyệt'
+        });
+      }
+      trangThaiMoi = 'cap_phong_tu_choi';
+      
+      // Lấy lịch sử từ chối hiện tại
+      let lichSuTuChoi = [];
+      if (baoCao.lich_su_tu_choi) {
+        try {
+          lichSuTuChoi = JSON.parse(baoCao.lich_su_tu_choi);
+        } catch (e) {
+          lichSuTuChoi = [];
+        }
+      }
+      
+      // Thêm lần từ chối mới vào lịch sử
+      lichSuTuChoi.push({
+        id_nguoi_tu_choi: id_nguoi_phe_duyet,
+        ten_nguoi_tu_choi: nguoiTuChoi.ho_ten || nguoiTuChoi.username,
+        ly_do: ly_do_tu_choi || null,
+        ngay_tu_choi: new Date().toISOString()
+      });
+      
+      updateData = {
+        trang_thai: trangThaiMoi,
+        id_nguoi_cap_phong_phe_duyet: id_nguoi_phe_duyet,
+        ly_do_tu_choi: ly_do_tu_choi || null,
+        lich_su_tu_choi: JSON.stringify(lichSuTuChoi)
+      };
+      message = 'Cấp phòng đã từ chối báo cáo';
+    } 
+    // Nếu là viện trưởng từ chối
+    else if (userRole === 'vien_truong') {
+      if (baoCao.trang_thai !== 'cho_phe_duyet') {
+        return res.status(400).json({
+          success: false,
+          message: 'Báo cáo không ở trạng thái chờ phê duyệt'
+        });
+      }
+      trangThaiMoi = 'tu_choi';
+      updateData = {
+        trang_thai: trangThaiMoi,
+        id_nguoi_phe_duyet: id_nguoi_phe_duyet,
+        ly_do_tu_choi: ly_do_tu_choi || null
+      };
+      message = 'Viện trưởng đã từ chối báo cáo';
+    } else {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền từ chối báo cáo'
+      });
+    }
+
+    await baoCao.update(updateData);
 
     const updatedBaoCao = await db.BaoCao.findByPk(id, {
       include: [
@@ -608,38 +751,87 @@ const tuChoiBaoCao = async (req, res) => {
         {
           model: db.TaiKhoan,
           as: 'nguoiPheDuyet',
-          attributes: ['id', 'username', 'ho_ten']
+          attributes: ['id', 'username', 'ho_ten'],
+          required: false
+        },
+        {
+          model: db.TaiKhoan,
+          as: 'nguoiCapPhongPheDuyet',
+          attributes: ['id', 'username', 'ho_ten'],
+          required: false
         }
       ]
     });
 
-    // Gửi thông báo cho người tạo báo cáo khi bị từ chối
+    // Gửi thông báo
     const io = req.app.get('io');
-    if (io && updatedBaoCao.id_nguoi_tao) {
+    if (io) {
       const { sendNotificationToUser } = require('../socket/socketServer');
       const nguoiTuChoiName = updatedBaoCao.nguoiPheDuyet?.ho_ten || 
+                              updatedBaoCao.nguoiCapPhongPheDuyet?.ho_ten ||
                               updatedBaoCao.nguoiPheDuyet?.username || 
+                              updatedBaoCao.nguoiCapPhongPheDuyet?.username ||
                               req.user?.ho_ten || 
                               req.user?.username || 
-                              'Viện trưởng';
+                              (userRole === 'cap_phong' ? 'Cấp phòng' : 'Viện trưởng');
       const lyDoText = ly_do_tu_choi ? ` Lý do: ${ly_do_tu_choi}` : '';
-      await sendNotificationToUser(
-        io,
-        updatedBaoCao.id_nguoi_tao,
-        {
-          id_nguoi_gui: id_nguoi_phe_duyet,
-          tieu_de: 'Báo cáo bị từ chối',
-          noi_dung: `Báo cáo "${updatedBaoCao.tieu_de}" đã bị từ chối bởi ${nguoiTuChoiName}.${lyDoText}`,
-          loai: 'canh_bao',
-          loai_du_lieu: 'bao_cao',
-          id_du_lieu: updatedBaoCao.id
+
+      // Gửi thông báo cho người tạo báo cáo
+      if (updatedBaoCao.id_nguoi_tao) {
+        await sendNotificationToUser(
+          io,
+          updatedBaoCao.id_nguoi_tao,
+          {
+            id_nguoi_gui: id_nguoi_phe_duyet,
+            tieu_de: userRole === 'cap_phong' ? 'Báo cáo bị cấp phòng từ chối' : 'Báo cáo bị từ chối',
+            noi_dung: `Báo cáo "${updatedBaoCao.tieu_de}" đã bị từ chối bởi ${nguoiTuChoiName}.${lyDoText}`,
+            loai: 'canh_bao',
+            loai_du_lieu: 'bao_cao',
+            id_du_lieu: updatedBaoCao.id
+          }
+        );
+      }
+
+      // Nếu là cấp phòng từ chối, gửi thông báo cho viện trưởng và kế toán của viện
+      if (userRole === 'cap_phong' && updatedBaoCao.id_vien) {
+        // Lấy viện trưởng và kế toán của viện
+        const vienTruongVaKeToan = await db.TaiKhoan.findAll({
+          where: {
+            id_vien: updatedBaoCao.id_vien,
+            trang_thai: 1
+          },
+          include: [
+            {
+              model: db.Quyen,
+              as: 'quyen',
+              attributes: ['ten_quyen'],
+              where: {
+                ten_quyen: { [Op.in]: ['vien_truong', 'ke_toan_vien'] }
+              }
+            }
+          ]
+        });
+
+        for (const user of vienTruongVaKeToan) {
+          await sendNotificationToUser(
+            io,
+            user.id,
+            {
+              id_nguoi_gui: id_nguoi_phe_duyet,
+              tieu_de: 'Báo cáo bị cấp phòng từ chối',
+              noi_dung: `Báo cáo "${updatedBaoCao.tieu_de}" của Viện ${updatedBaoCao.vien?.ten_vien || ''} đã bị cấp phòng từ chối.${lyDoText}`,
+              loai: 'canh_bao',
+              loai_du_lieu: 'bao_cao',
+              id_du_lieu: updatedBaoCao.id
+            }
+          );
         }
-      );
+      }
     }
 
     res.json({
       success: true,
-      message: 'Từ chối báo cáo thành công',
+      message: message,
       data: updatedBaoCao
     });
   } catch (error) {
@@ -684,6 +876,116 @@ const uploadFileBaoCao = async (req, res) => {
   }
 };
 
+// Gửi báo cáo đã được viện trưởng duyệt lên cấp phòng
+const guiLenCapPhong = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userRole = req.user.ten_quyen;
+
+    // Chỉ viện trưởng mới có quyền gửi lên cấp phòng
+    if (userRole !== 'vien_truong') {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ viện trưởng mới có quyền gửi báo cáo lên cấp phòng'
+      });
+    }
+
+    const baoCao = await db.BaoCao.findByPk(id);
+    if (!baoCao) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy báo cáo'
+      });
+    }
+
+    // Chỉ có thể gửi lên cấp phòng khi đã được viện trưởng duyệt
+    if (baoCao.trang_thai !== 'da_phe_duyet') {
+      return res.status(400).json({
+        success: false,
+        message: 'Báo cáo phải được viện trưởng phê duyệt trước khi gửi lên cấp phòng'
+      });
+    }
+
+    // Cập nhật trạng thái
+    await baoCao.update({
+      trang_thai: 'cho_cap_phong_duyet'
+    });
+
+    const updatedBaoCao = await db.BaoCao.findByPk(id, {
+      include: [
+        {
+          model: db.Vien,
+          as: 'vien',
+          attributes: ['id', 'ten_vien'],
+          required: false
+        },
+        {
+          model: db.TaiKhoan,
+          as: 'nguoiTao',
+          attributes: ['id', 'username', 'ho_ten']
+        },
+        {
+          model: db.TaiKhoan,
+          as: 'nguoiPheDuyet',
+          attributes: ['id', 'username', 'ho_ten'],
+          required: false
+        }
+      ]
+    });
+
+    // Gửi thông báo cho tất cả tài khoản cấp phòng
+    const io = req.app.get('io');
+    if (io) {
+      const { sendNotificationToUser } = require('../socket/socketServer');
+      
+      // Lấy tất cả tài khoản cấp phòng
+      const capPhongs = await db.TaiKhoan.findAll({
+        where: {
+          trang_thai: 1
+        },
+        include: [
+          {
+            model: db.Quyen,
+            as: 'quyen',
+            attributes: ['ten_quyen'],
+            where: {
+              ten_quyen: 'cap_phong'
+            }
+          }
+        ]
+      });
+
+      for (const capPhong of capPhongs) {
+        await sendNotificationToUser(
+          io,
+          capPhong.id,
+          {
+            id_nguoi_gui: req.user.id,
+            tieu_de: 'Báo cáo mới cần cấp phòng duyệt',
+            noi_dung: `Báo cáo "${updatedBaoCao.tieu_de}" của Viện ${updatedBaoCao.vien?.ten_vien || ''} đã được viện trưởng phê duyệt và cần cấp phòng duyệt`,
+            loai: 'thong_bao',
+            loai_du_lieu: 'bao_cao',
+            id_du_lieu: updatedBaoCao.id
+          }
+        );
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Gửi báo cáo lên cấp phòng thành công',
+      data: updatedBaoCao
+    });
+  } catch (error) {
+    console.error('Lỗi khi gửi báo cáo lên cấp phòng:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi khi gửi báo cáo lên cấp phòng',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllBaoCao,
   getBaoCaoById,
@@ -693,6 +995,7 @@ module.exports = {
   guiBaoCao,
   pheDuyetBaoCao,
   tuChoiBaoCao,
+  guiLenCapPhong,
   uploadFileBaoCao
 };
 

@@ -488,6 +488,13 @@ export const baoCaoAPI = {
     return response;
   },
 
+  guiLenCapPhong: async (id) => {
+    const response = await apiRequest(`/bao-cao/${id}/gui-len-cap-phong`, {
+      method: 'POST',
+    });
+    return response;
+  },
+
   // Upload file cho báo cáo
   uploadFile: async (file) => {
     const token = getToken();

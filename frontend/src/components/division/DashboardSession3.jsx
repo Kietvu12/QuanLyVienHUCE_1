@@ -1,32 +1,14 @@
 import { FaBuilding, FaCheckCircle, FaTimesCircle, FaEye } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
-import React from 'react'
-const pendingReports = [
-  {
-    id: 'BC-2025-001',
-    name: 'Báo cáo doanh thu tháng 12/2025',
-    type: 'Báo cáo doanh thu',
-    institute: 'Viện Tin học Xây Dựng',
-    createdBy: 'Nguyễn Văn A',
-    sentDate: '15/12/2025',
-  },
-  {
-    id: 'BC-2025-002',
-    name: 'Báo cáo đề tài nghiên cứu Q4/2025',
-    type: 'Báo cáo đề tài',
-    institute: 'Viện Khoa học Công nghệ',
-    createdBy: 'Trần Thị B',
-    sentDate: '14/12/2025',
-  },
-  {
-    id: 'BC-2025-005',
-    name: 'Báo cáo nhân sự tháng 12/2025',
-    type: 'Báo cáo nhân sự',
-    institute: 'Viện Nghiên cứu Phát triển',
-    createdBy: 'Lê Văn C',
-    sentDate: '13/12/2025',
-  },
-];
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '../../context/AuthContext';
+import { baoCaoAPI } from '../../services/api';
+
+const formatDate = (dateString) => {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('vi-VN');
+};
 
 const getTypeColor = (type) => {
   if (type.includes('doanh thu')) return 'bg-emerald-100 text-emerald-800';
@@ -38,6 +20,59 @@ const getTypeColor = (type) => {
 
 const DashboardSession3 = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const [loading, setLoading] = useState(true);
+  const [pendingReports, setPendingReports] = useState([]);
+
+  useEffect(() => {
+    if (user) {
+      fetchPendingReports();
+    }
+  }, [user]);
+
+  const fetchPendingReports = async () => {
+    try {
+      setLoading(true);
+      // Cấp phòng lấy tất cả báo cáo chờ duyệt (không filter id_vien)
+      const response = await baoCaoAPI.getAll({
+        trang_thai: 'cho_phe_duyet',
+        limit: 10,
+        page: 1
+      });
+
+      if (response.success) {
+        const reports = (response.data || []).map(item => {
+          // Xác định loại báo cáo từ tiêu đề
+          let type = 'Báo cáo khác';
+          const tieuDe = item.tieu_de?.toLowerCase() || '';
+          if (tieuDe.includes('doanh thu')) {
+            type = 'Báo cáo doanh thu';
+          } else if (tieuDe.includes('đề tài') || tieuDe.includes('nghiên cứu')) {
+            type = 'Báo cáo đề tài';
+          } else if (tieuDe.includes('nhân sự')) {
+            type = 'Báo cáo nhân sự';
+          } else if (tieuDe.includes('tài sản')) {
+            type = 'Báo cáo tài sản';
+          }
+
+          return {
+            id: `BC-${item.id}`,
+            name: item.tieu_de,
+            type: type,
+            institute: item.vien?.ten_vien || 'Chưa xác định',
+            createdBy: item.nguoiTao?.ho_ten || item.nguoiTao?.username || 'N/A',
+            sentDate: formatDate(item.ngay_gui || item.ngay_tao),
+            rawData: item
+          };
+        });
+        setPendingReports(reports);
+      }
+    } catch (err) {
+      console.error('Error fetching pending reports:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <section className="px-6">
@@ -86,7 +121,16 @@ const DashboardSession3 = () => {
               </tr>
             </thead>
             <tbody>
-              {pendingReports.map((report) => (
+              {loading ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8 text-gray-500">Đang tải...</td>
+                </tr>
+              ) : pendingReports.length === 0 ? (
+                <tr>
+                  <td colSpan="7" className="text-center py-8 text-gray-500">Không có báo cáo chờ duyệt</td>
+                </tr>
+              ) : (
+                pendingReports.map((report) => (
                 <tr key={report.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
                   <td className="py-4 px-4">
                     <span className="text-sm font-medium text-blue-600">{report.id}</span>
@@ -137,14 +181,20 @@ const DashboardSession3 = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+                ))
+              )}
             </tbody>
           </table>
         </div>
 
         {/* Mobile/Tablet Cards */}
         <div className="2xl:hidden space-y-4">
-          {pendingReports.map((report) => (
+          {loading ? (
+            <div className="text-center py-8 text-gray-500">Đang tải...</div>
+          ) : pendingReports.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">Không có báo cáo chờ duyệt</div>
+          ) : (
+            pendingReports.map((report) => (
             <div key={report.id} className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
@@ -198,7 +248,8 @@ const DashboardSession3 = () => {
                 </button>
               </div>
             </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </section>

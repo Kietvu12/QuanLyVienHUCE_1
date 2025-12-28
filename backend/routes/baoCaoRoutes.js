@@ -22,6 +22,8 @@ router.delete('/:id', authorize('ke_toan_vien', 'vien_truong', 'cap_phong', 'hie
 
 // Gửi báo cáo - cho phép ke_toan_vien, vien_truong, cap_phong, hieu_truong
 router.post('/:id/gui', authorize('ke_toan_vien', 'vien_truong', 'cap_phong', 'hieu_truong'), baoCaoController.guiBaoCao);
+// Gửi lên cấp phòng - chỉ cho phép vien_truong
+router.post('/:id/gui-len-cap-phong', authorize('vien_truong'), baoCaoController.guiLenCapPhong);
 // Phê duyệt, từ chối - chỉ cho phép vien_truong, cap_phong, hieu_truong
 router.post('/:id/phe-duyet', authorize('vien_truong', 'cap_phong', 'hieu_truong'), baoCaoController.pheDuyetBaoCao);
 router.post('/:id/tu-choi', authorize('vien_truong', 'cap_phong', 'hieu_truong'), baoCaoController.tuChoiBaoCao);

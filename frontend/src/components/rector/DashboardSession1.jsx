@@ -1,7 +1,7 @@
-import { FaWallet, FaGlobe, FaUsers, FaExclamationTriangle } from 'react-icons/fa';
+import { FaWallet, FaGlobe, FaUsers, FaExclamationTriangle, FaFileInvoice } from 'react-icons/fa';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { doanhThuAPI, deTaiNghienCuuStatisticsAPI, nhanSuStatisticsAPI, taiSanAPI } from '../../services/api';
+import { doanhThuAPI, deTaiNghienCuuStatisticsAPI, nhanSuStatisticsAPI, taiSanAPI, nghiaVuNopAPI } from '../../services/api';
 
 const formatCurrency = (value) => {
   if (typeof value === 'number' || typeof value === 'string') {
@@ -39,6 +39,13 @@ const DashboardSession1 = () => {
       value: '0 thiết bị hỏng',
       icon: FaExclamationTriangle,
     },
+    {
+      label: 'Nghĩa vụ & Công nợ',
+      value: '0 đ',
+      change: null,
+      changeColor: 'text-red-500',
+      icon: FaFileInvoice,
+    },
   ]);
 
   useEffect(() => {
@@ -66,66 +73,96 @@ const DashboardSession1 = () => {
       const params = idVien ? { id_vien: idVien } : {};
       console.log('API params:', params);
       
-      const [revenueStats, projectStats, personnelStats, assetStats] = await Promise.all([
+      const [revenueStats, projectStats, personnelStats, assetStats, nghiaVuStats] = await Promise.allSettled([
         doanhThuAPI.getStatistics(params),
         deTaiNghienCuuStatisticsAPI.getStatistics(params),
         nhanSuStatisticsAPI.getSummary(params),
-        taiSanAPI.getStatistics(params)
+        taiSanAPI.getStatistics(params),
+        nghiaVuNopAPI.getStatistics(params)
       ]);
+
+      // Xử lý kết quả từ Promise.allSettled
+      const revenueData = revenueStats.status === 'fulfilled' ? revenueStats.value : null;
+      const projectData = projectStats.status === 'fulfilled' ? projectStats.value : null;
+      const personnelData = personnelStats.status === 'fulfilled' ? personnelStats.value : null;
+      const assetData = assetStats.status === 'fulfilled' ? assetStats.value : null;
+      const nghiaVuData = nghiaVuStats.status === 'fulfilled' ? nghiaVuStats.value : null;
 
       // Log responses để debug
       console.log('Dashboard API responses:', {
         revenueStats: {
-          success: revenueStats?.success,
-          data: revenueStats?.data,
-          message: revenueStats?.message
+          status: revenueStats.status,
+          success: revenueData?.success,
+          data: revenueData?.data,
+          message: revenueData?.message,
+          error: revenueStats.status === 'rejected' ? revenueStats.reason : null
         },
         projectStats: {
-          success: projectStats?.success,
-          data: projectStats?.data,
-          message: projectStats?.message
+          status: projectStats.status,
+          success: projectData?.success,
+          data: projectData?.data,
+          message: projectData?.message,
+          error: projectStats.status === 'rejected' ? projectStats.reason : null
         },
         personnelStats: {
-          success: personnelStats?.success,
-          data: personnelStats?.data,
-          message: personnelStats?.message
+          status: personnelStats.status,
+          success: personnelData?.success,
+          data: personnelData?.data,
+          message: personnelData?.message,
+          error: personnelStats.status === 'rejected' ? personnelStats.reason : null
         },
         assetStats: {
-          success: assetStats?.success,
-          data: assetStats?.data,
-          message: assetStats?.message
+          status: assetStats.status,
+          success: assetData?.success,
+          data: assetData?.data,
+          message: assetData?.message,
+          error: assetStats.status === 'rejected' ? assetStats.reason : null
+        },
+        nghiaVuStats: {
+          status: nghiaVuStats.status,
+          success: nghiaVuData?.success,
+          data: nghiaVuData?.data,
+          message: nghiaVuData?.message,
+          error: nghiaVuStats.status === 'rejected' ? nghiaVuStats.reason : null
         }
       });
 
       const newCards = [
         {
           label: 'Doanh thu',
-          value: formatCurrency(revenueStats?.success ? (revenueStats.data?.tong_doanh_thu || 0) : 0),
+          value: formatCurrency(revenueData?.success ? (revenueData.data?.tong_doanh_thu || 0) : 0),
           change: null,
           changeColor: 'text-emerald-500',
           icon: FaWallet,
         },
         {
           label: 'Đề tài nghiên cứu',
-          value: projectStats?.success ? (projectStats.data?.tong_de_tai || 0).toString() : '0',
-          change: projectStats?.success && projectStats.data?.change?.tong_de_tai ? 
-            `+${projectStats.data.change.tong_de_tai}` : null,
+          value: projectData?.success ? (projectData.data?.tong_de_tai || 0).toString() : '0',
+          change: projectData?.success && projectData.data?.change?.tong_de_tai ? 
+            `+${projectData.data.change.tong_de_tai}` : null,
           changeColor: 'text-emerald-500',
           icon: FaGlobe,
         },
         {
           label: 'Nhân sự',
-          value: personnelStats?.success ? 
-            (personnelStats.data?.nhan_su_moi > 0 ? `+ ${personnelStats.data.nhan_su_moi} nhân sự mới` : 
-             `${personnelStats.data?.tong_nhan_su || 0} nhân sự`) : '0',
+          value: personnelData?.success ? 
+            (personnelData.data?.nhan_su_moi > 0 ? `+ ${personnelData.data.nhan_su_moi} nhân sự mới` : 
+             `${personnelData.data?.tong_nhan_su || 0} nhân sự`) : '0',
           change: null,
           icon: FaUsers,
         },
         {
           label: 'Cảnh báo thiết bị',
-          value: assetStats?.success ? 
-            `${assetStats.data?.thiet_bi_hong || 0} thiết bị hỏng` : '0 thiết bị hỏng',
+          value: assetData?.success ? 
+            `${assetData.data?.thiet_bi_hong || 0} thiết bị hỏng` : '0 thiết bị hỏng',
           icon: FaExclamationTriangle,
+        },
+        {
+          label: 'Nghĩa vụ & Công nợ',
+          value: nghiaVuData?.success ? 
+            formatCurrency(nghiaVuData.data?.tong_cong_no || 0) : '0 đ',
+          changeColor: 'text-red-500',
+          icon: FaFileInvoice,
         },
       ];
 
@@ -159,6 +196,13 @@ const DashboardSession1 = () => {
           value: '0 thiết bị hỏng',
           icon: FaExclamationTriangle,
         },
+        {
+          label: 'Nghĩa vụ & Công nợ',
+          value: '0 đ',
+          change: null,
+          changeColor: 'text-red-500',
+          icon: FaFileInvoice,
+        },
       ]);
     } finally {
       setLoading(false);
@@ -167,9 +211,9 @@ const DashboardSession1 = () => {
 
   return (
     <section className="px-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-4">
         {loading ? (
-          Array.from({ length: 4 }).map((_, index) => (
+          Array.from({ length: 5 }).map((_, index) => (
             <div
               key={index}
               className="flex items-center justify-between rounded-2xl bg-white shadow-sm px-6 py-5"

@@ -34,6 +34,12 @@ module.exports = (sequelize) => {
       allowNull: false,
       defaultValue: 'chua_nop',
       comment: 'Trạng thái: chua_nop, da_nop, qua_han'
+    },
+    so_tien_phai_nop: {
+      type: DataTypes.DECIMAL(15, 2),
+      allowNull: true,
+      defaultValue: null,
+      comment: 'Số tiền phải nộp'
     }
   }, {
     tableName: 'nghia_vu_nop',

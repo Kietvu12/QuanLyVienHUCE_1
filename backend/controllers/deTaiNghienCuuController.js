@@ -1,5 +1,6 @@
 const db = require('../models');
 const { Op } = require('sequelize');
+const { sendDataUpdateNotification } = require('../utils/notificationHelper');
 
 // Lấy tất cả đề tài nghiên cứu (có thể filter theo id_vien, trang_thai, linh_vuc, search)
 const getAllDeTaiNghienCuu = async (req, res) => {
@@ -175,6 +176,20 @@ const createDeTaiNghienCuu = async (req, res) => {
       ]
     });
 
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user && id_vien) {
+      await sendDataUpdateNotification(
+        io,
+        id_vien,
+        req.user.id,
+        'de_tai_nghien_cuu',
+        deTai.id,
+        ten_de_tai,
+        'them_moi'
+      );
+    }
+
     res.status(201).json({
       success: true,
       message: 'Tạo đề tài nghiên cứu thành công',
@@ -261,6 +276,20 @@ const updateDeTaiNghienCuu = async (req, res) => {
       ]
     });
 
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user && updatedDeTai?.id_vien) {
+      await sendDataUpdateNotification(
+        io,
+        updatedDeTai.id_vien,
+        req.user.id,
+        'de_tai_nghien_cuu',
+        updatedDeTai.id,
+        updatedDeTai.ten_de_tai,
+        'cap_nhat'
+      );
+    }
+
     res.json({
       success: true,
       message: 'Cập nhật đề tài nghiên cứu thành công',
@@ -289,7 +318,24 @@ const deleteDeTaiNghienCuu = async (req, res) => {
       });
     }
 
+    const tenDeTai = deTai.ten_de_tai;
+    const idVien = deTai.id_vien;
+
     await deTai.destroy();
+
+    // Gửi thông báo
+    const io = req.app.get('io');
+    if (io && req.user && idVien) {
+      await sendDataUpdateNotification(
+        io,
+        idVien,
+        req.user.id,
+        'de_tai_nghien_cuu',
+        id,
+        tenDeTai,
+        'xoa'
+      );
+    }
 
     res.json({
       success: true,

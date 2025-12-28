@@ -47,10 +47,24 @@ module.exports = (sequelize) => {
       comment: 'Đường dẫn tài liệu'
     },
     trang_thai: {
-      type: DataTypes.ENUM('cho_phe_duyet', 'da_phe_duyet', 'tu_choi'),
+      type: DataTypes.ENUM('cho_phe_duyet', 'da_phe_duyet', 'tu_choi', 'cho_cap_phong_duyet', 'da_cap_phong_duyet', 'cap_phong_tu_choi'),
       allowNull: false,
       defaultValue: 'cho_phe_duyet',
       comment: 'Trạng thái báo cáo'
+    },
+    id_nguoi_cap_phong_phe_duyet: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'tai_khoan',
+        key: 'id'
+      },
+      comment: 'ID người cấp phòng phê duyệt (khóa ngoại) - có thể null'
+    },
+    ngay_cap_phong_duyet: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      comment: 'Ngày cấp phòng duyệt'
     },
     ngay_gui: {
       type: DataTypes.DATE,
@@ -61,6 +75,11 @@ module.exports = (sequelize) => {
       type: DataTypes.TEXT,
       allowNull: true,
       comment: 'Lý do từ chối báo cáo'
+    },
+    lich_su_tu_choi: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      comment: 'Lịch sử từ chối (JSON array)'
     }
   }, {
     tableName: 'bao_cao',
@@ -79,6 +98,9 @@ module.exports = (sequelize) => {
       },
       {
         fields: ['trang_thai']
+      },
+      {
+        fields: ['id_nguoi_cap_phong_phe_duyet']
       }
     ]
   });
@@ -96,10 +118,16 @@ module.exports = (sequelize) => {
       as: 'nguoiTao'
     });
 
-    // Một báo cáo được phê duyệt bởi một tài khoản
+    // Một báo cáo được phê duyệt bởi một tài khoản (viện trưởng)
     BaoCao.belongsTo(models.TaiKhoan, {
       foreignKey: 'id_nguoi_phe_duyet',
       as: 'nguoiPheDuyet'
+    });
+
+    // Một báo cáo được phê duyệt bởi cấp phòng
+    BaoCao.belongsTo(models.TaiKhoan, {
+      foreignKey: 'id_nguoi_cap_phong_phe_duyet',
+      as: 'nguoiCapPhongPheDuyet'
     });
   };
 
